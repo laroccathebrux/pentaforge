@@ -74,10 +74,17 @@ Auto-detects Portuguese vs English from input prompt. All personas and outputs a
 ## Key Integration Points
 
 ### Project Context Integration
-Before starting discussions, PentaForge automatically reads:
-- `CLAUDE.md` from the client's project directory (if present)
-- All documentation files in `docs/` directory and subdirectories (.md, .txt, .rst, .adoc, .org)
-- Provides this context to all personas for more relevant, project-specific responses
+PentaForge supports project context in two ways:
+
+**Option 1: MCP Client Context (Recommended)**
+- Claude Code can provide project context via `claudeMd` and `docsContext` parameters
+- More reliable than file system access from Docker containers
+- Allows Claude Code to intelligently select relevant documentation
+
+**Option 2: Local File Reading (Fallback)**
+- Attempts to read `CLAUDE.md` and `docs/` directory from container's working directory
+- Used when no context parameters are provided
+- Less reliable in containerized environments
 
 ### MCP Tool Interface
 The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. It accepts:
@@ -86,6 +93,23 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
 - `language`: Output language (auto-detected)
 - `dryRun`: Print to stdout without writing files
 - `model`: AI model to use (e.g., `mistral:latest`, `deepseek-coder:latest` for Ollama)
+- `claudeMd`: Content of CLAUDE.md file from the project (optional)
+- `docsContext`: Array of documentation files from docs/ directory (optional)
+
+**Example with Context:**
+```json
+{
+  "prompt": "Add user authentication to my app",
+  "claudeMd": "# My Project\n\nThis is a React app with Express backend...",
+  "docsContext": [
+    {
+      "path": "docs/api.md",
+      "content": "# API Documentation\n\nEndpoints:\n- GET /api/users..."
+    }
+  ],
+  "dryRun": true
+}
+```
 
 ### File System Operations
 All file operations use atomic writes through `src/lib/fs.ts` to prevent corruption. Files are timestamped with format `YYYY-MM-DDTHHMMSSZ`.

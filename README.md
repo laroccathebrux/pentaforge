@@ -20,6 +20,7 @@ The result is two markdown documents ready for use with [PRPs-agentic-eng](https
 
 - 🎭 **5 Expert Personas**: Each with unique perspectives and objectives
 - 🧠 **AI-Powered Discussions**: Dynamic, contextual responses using OpenAI, Anthropic, or local models
+- 📋 **Project Context Integration**: Reads CLAUDE.md and docs/ files for project-specific recommendations
 - 🌍 **Internationalization**: Supports English and Portuguese (auto-detected)
 - 📝 **PRP-Ready Output**: Compatible with PRPs-agentic-eng workflow
 - 🐳 **Docker Support**: Run locally or in containers
@@ -187,17 +188,34 @@ claude mcp add pentaforge -- node /path/to/pentaforge/dist/server.js
 
 Once registered with Claude Code, you can invoke the `run_roundtable` tool:
 
+### Basic Usage
 ```json
 {
-  "tool": "run_roundtable",
-  "arguments": {
-    "prompt": "In my Todo app, items are lost on refresh. I need data persistence across sessions.",
-    "outputDir": "./PRPs/inputs",
-    "language": "en",
-    "tone": "professional",
-    "includeAcceptanceCriteria": true,
-    "model": "deepseek-coder:latest"
-  }
+  "prompt": "In my Todo app, items are lost on refresh. I need data persistence across sessions.",
+  "outputDir": "./PRPs/inputs",
+  "language": "en",
+  "tone": "professional",
+  "includeAcceptanceCriteria": true,
+  "model": "deepseek-coder:latest"
+}
+```
+
+### Usage with Project Context (Recommended)
+```json
+{
+  "prompt": "Add user authentication to my React app",
+  "claudeMd": "# My Todo App\n\nThis is a React application with Express.js backend.\n\n## Architecture\n- Frontend: React 18 with TypeScript\n- Backend: Express.js with MongoDB\n- Authentication: Currently none (to be implemented)",
+  "docsContext": [
+    {
+      "path": "docs/api.md",
+      "content": "# API Documentation\n\n## Endpoints\n- GET /api/todos - Get all todos\n- POST /api/todos - Create new todo\n- PUT /api/todos/:id - Update todo"
+    },
+    {
+      "path": "docs/database.md", 
+      "content": "# Database Schema\n\n## Collections\n- todos: { id, title, completed, createdAt }"
+    }
+  ],
+  "dryRun": true
 }
 ```
 
@@ -210,6 +228,37 @@ Once registered with Claude Code, you can invoke the `run_roundtable` tool:
 - **includeAcceptanceCriteria** (optional): Include Gherkin scenarios (default: true)
 - **dryRun** (optional): Print to stdout without writing files (default: false)
 - **model** (optional): Override AI model for this call (e.g., `mistral:latest`, `deepseek-coder:latest`)
+- **claudeMd** (optional): Content of CLAUDE.md file from the project
+- **docsContext** (optional): Array of documentation files from docs/ directory
+
+## Project Context Integration
+
+PentaForge can use your project's existing documentation to generate more relevant and specific recommendations. When project context is provided, all AI personas will:
+
+- Reference your existing architecture and technology stack
+- Suggest solutions that fit your current codebase patterns
+- Consider your project's specific constraints and requirements
+- Generate implementation details aligned with your established conventions
+
+### Context Sources
+
+**CLAUDE.md**: Project overview, architecture, guidelines, and conventions
+**docs/ directory**: API documentation, database schemas, deployment guides, etc.
+
+### How Context is Used
+
+1. **Solutions Architect** uses architecture info to suggest compatible technical solutions
+2. **Business Analyst** references existing features when defining requirements
+3. **Key User** considers current user workflows when describing pain points  
+4. **Product Owner** aligns priorities with existing roadmap items
+5. **Scrum Master** factors in current team practices and constraints
+
+### Best Practices
+
+- Include relevant sections of CLAUDE.md (architecture, tech stack, conventions)
+- Provide key documentation files (API docs, database schemas, setup guides)
+- Keep context focused - only include files directly relevant to the task
+- Update context when project architecture changes significantly
 
 ## Example Output
 
