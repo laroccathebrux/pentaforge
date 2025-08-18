@@ -263,72 +263,103 @@ export async function writeRequestMarkdown(
     lines.push('');
   }
 
-  // API Points - Generic structure
+  // API Points - AI-generated structure
   lines.push(`## ${isPortuguese ? 'Pontos de Integração API' : 'API Integration Points'}`);
   lines.push('');
-  lines.push(`**${isPortuguese ? 'Endpoints Necessários' : 'Required Endpoints'}:**`);
-  lines.push(isPortuguese
-    ? '- Definir endpoints baseados na funcionalidade requerida'
-    : '- Define endpoints based on required functionality'
-  );
-  lines.push(isPortuguese
-    ? '- Implementar autenticação e autorização adequadas'
-    : '- Implement appropriate authentication and authorization'
-  );
-  lines.push(isPortuguese
-    ? '- Seguir padrões REST/GraphQL conforme apropriado'
-    : '- Follow REST/GraphQL standards as appropriate'
-  );
-  lines.push('');
-
-  // Acceptance Criteria - Generic template
-  if (includeAcceptanceCriteria) {
-    lines.push(`## ${isPortuguese ? 'Critérios de Aceitação' : 'Acceptance Criteria'}`);
+  
+  try {
+    log.debug('🎯 Generating AI content for API Integration Points...');
+    const apiContent = await aiGenerator.generateSectionContent(
+      'api_points',
+      prompt,
+      language
+    );
+    
+    lines.push(apiContent.content);
     lines.push('');
-    lines.push('```gherkin');
-    lines.push(isPortuguese ? 'Funcionalidade: Implementação da Solução' : 'Feature: Solution Implementation');
-    lines.push('');
-    lines.push(isPortuguese ? '  Cenário: Funcionalidade principal' : '  Scenario: Core functionality');
-    lines.push(isPortuguese ? '    Dado que o usuário tem necessidades específicas' : '    Given user has specific needs');
-    lines.push(isPortuguese ? '    Quando o sistema é usado conforme especificado' : '    When system is used as specified');
-    lines.push(isPortuguese ? '    Então os requisitos devem ser atendidos' : '    Then requirements should be met');
-    lines.push(isPortuguese ? '    E a experiência deve ser satisfatória' : '    And experience should be satisfactory');
-    lines.push('```');
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI content for API Points, using minimal fallback');
+    lines.push(`**${isPortuguese ? 'Endpoints Necessários' : 'Required Endpoints'}:**`);
+    lines.push(isPortuguese
+      ? '- Definir endpoints baseados na funcionalidade requerida'
+      : '- Define endpoints based on required functionality'
+    );
     lines.push('');
   }
 
-  // Risks - Generic considerations
+  // Acceptance Criteria - AI-generated template
+  if (includeAcceptanceCriteria) {
+    lines.push(`## ${isPortuguese ? 'Critérios de Aceitação' : 'Acceptance Criteria'}`);
+    lines.push('');
+    
+    try {
+      log.debug('🎯 Generating AI content for Acceptance Criteria...');
+      const acceptanceContent = await aiGenerator.generateSectionContent(
+        'acceptance_criteria',
+        prompt,
+        language
+      );
+      
+      lines.push('```gherkin');
+      lines.push(acceptanceContent.content);
+      lines.push('```');
+      lines.push('');
+    } catch (error) {
+      log.warn('🚨 Failed to generate AI content for Acceptance Criteria, using minimal fallback');
+      lines.push('```gherkin');
+      lines.push(isPortuguese ? 'Funcionalidade: Implementação da Solução' : 'Feature: Solution Implementation');
+      lines.push('');
+      lines.push(isPortuguese ? '  Cenário: Funcionalidade principal' : '  Scenario: Core functionality');
+      lines.push(isPortuguese ? '    Dado que requisitos são implementados' : '    Given requirements are implemented');
+      lines.push(isPortuguese ? '    Quando sistema é utilizado' : '    When system is used');
+      lines.push(isPortuguese ? '    Então funciona conforme esperado' : '    Then works as expected');
+      lines.push('```');
+      lines.push('');
+    }
+  }
+
+  // Risks - AI-generated considerations
   lines.push(`## ${isPortuguese ? 'Riscos e Premissas' : 'Risks & Assumptions'}`);
   lines.push('');
-  lines.push(`### ${isPortuguese ? 'Riscos' : 'Risks'}`);
-  lines.push(isPortuguese
-    ? '1. Dependências externas podem impactar funcionalidade'
-    : '1. External dependencies may impact functionality'
-  );
-  lines.push(isPortuguese
-    ? '2. Complexidade técnica pode afetar cronograma'
-    : '2. Technical complexity may affect timeline'
-  );
-  lines.push(isPortuguese
-    ? '3. Mudanças de requisitos durante desenvolvimento'
-    : '3. Requirements changes during development'
-  );
-  lines.push('');
   
-  lines.push(`### ${isPortuguese ? 'Premissas' : 'Assumptions'}`);
-  lines.push(isPortuguese
-    ? '- Recursos necessários estarão disponíveis'
-    : '- Required resources will be available'
-  );
-  lines.push(isPortuguese
-    ? '- Usuários têm ambiente técnico adequado'
-    : '- Users have adequate technical environment'
-  );
-  lines.push(isPortuguese
-    ? '- Integrações necessárias são factíveis'
-    : '- Required integrations are feasible'
-  );
-  lines.push('');
+  try {
+    log.debug('🎯 Generating AI content for Risks & Assumptions...');
+    const risksContent = await aiGenerator.generateSectionContent(
+      'risks_assumptions',
+      prompt,
+      language
+    );
+    
+    const risksLines = risksContent.content.split('\n').filter(line => line.trim());
+    const midPoint = Math.ceil(risksLines.length / 2);
+    
+    lines.push(`### ${isPortuguese ? 'Riscos' : 'Risks'}`);
+    risksLines.slice(0, midPoint).forEach((line, index) => {
+      lines.push(`${index + 1}. ${line.trim()}`);
+    });
+    lines.push('');
+    
+    lines.push(`### ${isPortuguese ? 'Premissas' : 'Assumptions'}`);
+    risksLines.slice(midPoint).forEach(line => {
+      lines.push(`- ${line.trim()}`);
+    });
+    lines.push('');
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI content for Risks & Assumptions, using minimal fallback');
+    lines.push(`### ${isPortuguese ? 'Riscos' : 'Risks'}`);
+    lines.push(isPortuguese
+      ? '1. Riscos técnicos e de negócio devem ser identificados'
+      : '1. Technical and business risks to be identified'
+    );
+    lines.push('');
+    
+    lines.push(`### ${isPortuguese ? 'Premissas' : 'Assumptions'}`);
+    lines.push(isPortuguese
+      ? '- Premissas do projeto devem ser validadas'
+      : '- Project assumptions to be validated'
+    );
+    lines.push('');
+  }
 
   // Release Plan - Extract from Scrum Master insights
   const scrumInsights = getPersonaInsights(discussion.rounds, 'Scrum Master');
@@ -341,51 +372,112 @@ export async function writeRequestMarkdown(
     });
     lines.push('');
   } else {
-    // Generic fallback content
-    lines.push(`### ${isPortuguese ? 'Estratégia de Entrega' : 'Delivery Strategy'}`);
-    lines.push(isPortuguese
-      ? '- Dividir implementação em fases incrementais'
-      : '- Split implementation into incremental phases'
-    );
-    lines.push(isPortuguese
-      ? '- Priorizar funcionalidades core primeiro'
-      : '- Prioritize core functionality first'
-    );
-    lines.push('');
+    // AI-generated release plan content
+    try {
+      log.debug('🎯 Generating AI content for Release Plan...');
+      const releasePlanContent = await aiGenerator.generateSectionContent(
+        'release_plan',
+        prompt,
+        language
+      );
+      
+      lines.push(`### ${isPortuguese ? 'Estratégia de Entrega' : 'Delivery Strategy'}`);
+      const releaseLines = releasePlanContent.content.split('\n').filter(line => line.trim());
+      releaseLines.forEach(line => {
+        lines.push(`- ${line.trim()}`);
+      });
+      lines.push('');
+    } catch (error) {
+      log.warn('🚨 Failed to generate AI content for Release Plan, using minimal fallback');
+      lines.push(`### ${isPortuguese ? 'Estratégia de Entrega' : 'Delivery Strategy'}`);
+      lines.push(isPortuguese
+        ? '- Plano de release deve ser definido baseado nos requisitos'
+        : '- Release plan to be defined based on requirements'
+      );
+      lines.push('');
+    }
   }
 
-  // PRP-Ready Section
+  // PRP-Ready Section - AI-generated content
   lines.push(`## ${isPortuguese ? 'Artefatos PRP-Ready' : 'PRP-Ready Artifacts'}`);
   lines.push('');
   
-  lines.push(`### ${isPortuguese ? 'Objetivo da Feature' : 'Feature Goal'}`);
-  lines.push(isPortuguese
-    ? 'Implementar solução eficaz para resolver o problema apresentado'
-    : 'Implement effective solution to solve the presented problem'
-  );
-  lines.push('');
-  
-  lines.push(`### ${isPortuguese ? 'Entregável' : 'Deliverable'}`);
-  lines.push(isPortuguese
-    ? 'Sistema funcional que atende aos requisitos especificados'
-    : 'Functional system that meets specified requirements'
-  );
-  lines.push('');
-  
-  lines.push(`### ${isPortuguese ? 'Definição de Sucesso' : 'Success Definition'}`);
-  lines.push('- [ ] ' + (isPortuguese 
-    ? 'Requisitos funcionais implementados e testados'
-    : 'Functional requirements implemented and tested'
-  ));
-  lines.push('- [ ] ' + (isPortuguese
-    ? 'Qualidade e performance dentro dos padrões'
-    : 'Quality and performance within standards'
-  ));
-  lines.push('- [ ] ' + (isPortuguese
-    ? 'Satisfação dos usuários finais validada'
-    : 'End user satisfaction validated'
-  ));
-  lines.push('');
+  try {
+    log.debug('🎯 Generating AI content for PRP-Ready Artifacts...');
+    
+    // Generate Feature Goal
+    const featureGoalPrompt = isPortuguese
+      ? `Defina um objetivo claro e conciso para implementar: ${prompt}. Máximo 20 palavras.`
+      : `Define a clear and concise goal for implementing: ${prompt}. Maximum 20 words.`;
+    
+    const featureGoalContent = await aiGenerator.generateContent({
+      section: 'feature_goal',
+      prompt: featureGoalPrompt,
+      language,
+      maxWords: 20
+    });
+    
+    lines.push(`### ${isPortuguese ? 'Objetivo da Feature' : 'Feature Goal'}`);
+    lines.push(featureGoalContent);
+    lines.push('');
+    
+    // Generate Deliverable
+    const deliverablePrompt = isPortuguese
+      ? `Descreva o entregável principal para: ${prompt}. Máximo 15 palavras.`
+      : `Describe the main deliverable for: ${prompt}. Maximum 15 words.`;
+    
+    const deliverableContent = await aiGenerator.generateContent({
+      section: 'deliverable',
+      prompt: deliverablePrompt,
+      language,
+      maxWords: 15
+    });
+    
+    lines.push(`### ${isPortuguese ? 'Entregável' : 'Deliverable'}`);
+    lines.push(deliverableContent);
+    lines.push('');
+    
+    // Generate Success Definition
+    const successPrompt = isPortuguese
+      ? `Liste 3 critérios de sucesso mensuráveis para: ${prompt}`
+      : `List 3 measurable success criteria for: ${prompt}`;
+    
+    const successContent = await aiGenerator.generateContent({
+      section: 'success_definition',
+      prompt: successPrompt,
+      language,
+      maxWords: 60
+    });
+    
+    lines.push(`### ${isPortuguese ? 'Definição de Sucesso' : 'Success Definition'}`);
+    const successLines = successContent.split('\n').filter(line => line.trim());
+    successLines.forEach(line => {
+      lines.push(`- [ ] ${line.trim()}`);
+    });
+    lines.push('');
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI content for PRP-Ready Artifacts, using minimal fallback');
+    lines.push(`### ${isPortuguese ? 'Objetivo da Feature' : 'Feature Goal'}`);
+    lines.push(isPortuguese
+      ? 'Resolver o problema apresentado de forma eficaz'
+      : 'Solve the presented problem effectively'
+    );
+    lines.push('');
+    
+    lines.push(`### ${isPortuguese ? 'Entregável' : 'Deliverable'}`);
+    lines.push(isPortuguese
+      ? 'Sistema funcional conforme especificado'
+      : 'Functional system as specified'
+    );
+    lines.push('');
+    
+    lines.push(`### ${isPortuguese ? 'Definição de Sucesso' : 'Success Definition'}`);
+    lines.push('- [ ] ' + (isPortuguese 
+      ? 'Requisitos implementados'
+      : 'Requirements implemented'
+    ));
+    lines.push('');
+  }
 
   // Key Decisions from Discussion
   if (discussion.decisions && discussion.decisions.length > 0) {
