@@ -19,11 +19,13 @@ The result is two markdown documents ready for use with [PRPs-agentic-eng](https
 ## Features
 
 - 🎭 **5 Expert Personas**: Each with unique perspectives and objectives
+- 🧠 **AI-Powered Discussions**: Dynamic, contextual responses using OpenAI, Anthropic, or local models
 - 🌍 **Internationalization**: Supports English and Portuguese (auto-detected)
 - 📝 **PRP-Ready Output**: Compatible with PRPs-agentic-eng workflow
 - 🐳 **Docker Support**: Run locally or in containers
 - 🔄 **MCP Protocol**: Integrates with Claude Code and other MCP clients
-- ⚡ **Deterministic**: Same input produces consistent outputs
+- 🛡️ **Reliable Fallback**: Automatic hardcoded responses when AI is unavailable
+- ⚙️ **Multi-Provider Support**: Configurable AI backends with environment variables
 
 ## Installation
 
@@ -59,6 +61,92 @@ docker run -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
 #### Windows PowerShell
 ```powershell
 docker run -i --rm -v ${PWD}/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
+```
+
+## AI Configuration
+
+PentaForge personas are powered by AI to generate dynamic, contextual responses. The system supports multiple AI providers with automatic fallback to ensure reliability.
+
+### Supported AI Providers
+
+- **OpenAI** (GPT models) - `gpt-4o-mini`, `gpt-4`, `gpt-3.5-turbo`
+- **Anthropic** (Claude models) - `claude-3-haiku-20240307`, `claude-3-sonnet-20240229`
+- **Ollama** (Local models) - `llama3.2:3b`, `llama3.1`, `mistral`, etc.
+
+### Environment Variables
+
+Configure AI providers using these environment variables:
+
+```bash
+# AI Provider Configuration
+AI_PROVIDER=ollama                    # 'openai', 'anthropic', or 'ollama'
+AI_API_KEY=your_api_key              # Required for OpenAI/Anthropic
+AI_BASE_URL=http://localhost:11434   # Custom endpoint (optional)
+AI_MODEL=llama3.2:3b                 # Model name
+AI_TEMPERATURE=0.7                   # Response creativity (0-1)
+AI_MAX_TOKENS=500                    # Response length limit
+```
+
+### Default Models by Provider
+
+- **OpenAI**: `gpt-4o-mini` (fast, cost-effective)
+- **Anthropic**: `claude-3-haiku-20240307` (efficient, reliable)
+- **Ollama**: `llama3.2:3b` (local, privacy-focused)
+
+### Using with Docker
+
+Pass environment variables to Docker:
+
+```bash
+# Using OpenAI
+docker run -i --rm \
+  -e AI_PROVIDER=openai \
+  -e AI_API_KEY=your_openai_key \
+  -e AI_MODEL=gpt-4o-mini \
+  -v $(pwd)/PRPs/inputs:/app/PRPs/inputs \
+  pentaforge:latest
+
+# Using Anthropic
+docker run -i --rm \
+  -e AI_PROVIDER=anthropic \
+  -e AI_API_KEY=your_anthropic_key \
+  -e AI_MODEL=claude-3-haiku-20240307 \
+  -v $(pwd)/PRPs/inputs:/app/PRPs/inputs \
+  pentaforge:latest
+
+# Using local Ollama (default)
+docker run -i --rm \
+  -e AI_PROVIDER=ollama \
+  -e AI_BASE_URL=http://host.docker.internal:11434 \
+  -v $(pwd)/PRPs/inputs:/app/PRPs/inputs \
+  pentaforge:latest
+```
+
+### Fallback Behavior
+
+When AI providers are unavailable or fail:
+- ✅ Personas automatically use hardcoded responses
+- ✅ System continues to function normally  
+- ✅ No interruption to workflow
+- ✅ Quality specifications still generated
+
+This ensures PentaForge is always reliable, whether you have AI configured or not.
+
+### Setting up Ollama (Local AI)
+
+To use local AI models with Ollama:
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Download a model (3B parameter model, ~2GB)
+ollama pull llama3.2:3b
+
+# Verify it's running
+ollama list
+
+# PentaForge will connect automatically
 ```
 
 ## Claude Code Registration
@@ -256,7 +344,8 @@ pentaforge/
 │   ├── tools/
 │   │   └── roundtable.ts       # Main tool implementation
 │   ├── personas/               # Expert persona classes
-│   │   ├── base.ts
+│   │   ├── base.ts            # Base persona interface
+│   │   ├── aiPersona.ts       # AI-powered persona base class
 │   │   ├── KeyUser.ts
 │   │   ├── BusinessAnalyst.ts
 │   │   ├── ProductOwner.ts
@@ -268,6 +357,7 @@ pentaforge/
 │   │   ├── discussionWriter.ts
 │   │   └── requestWriter.ts
 │   └── lib/                    # Utilities
+│       ├── aiService.ts       # Multi-provider AI integration
 │       ├── clock.ts
 │       ├── id.ts
 │       ├── i18n.ts
@@ -292,6 +382,27 @@ pentaforge/
 
 ### Issue: MCP tool not appearing in Claude Code
 **Solution**: Restart Claude Code after registration. Check logs with `claude mcp list`.
+
+### Issue: AI responses are generic/hardcoded
+**Solution**: Check your AI configuration:
+- Verify `AI_PROVIDER` is set correctly (`openai`, `anthropic`, or `ollama`)
+- Ensure `AI_API_KEY` is valid for OpenAI/Anthropic
+- For Ollama, verify it's running: `curl http://localhost:11434/api/tags`
+- Check logs for AI service errors: `LOG_LEVEL=DEBUG npm start`
+
+### Issue: "Ollama API error: Not Found"
+**Solution**: 
+- Install Ollama: `curl -fsSL https://ollama.ai/install.sh | sh`
+- Download a model: `ollama pull llama3.2:3b`
+- Verify model exists: `ollama list`
+- Check Ollama is running: `ollama serve` (if not auto-started)
+
+### Issue: OpenAI/Anthropic API errors
+**Solution**:
+- Verify API key is correct and has sufficient credits
+- Check model name is valid (e.g., `gpt-4o-mini`, `claude-3-haiku-20240307`)
+- Monitor rate limits in provider dashboard
+- PentaForge will fallback to hardcoded responses automatically
 
 ## License
 
