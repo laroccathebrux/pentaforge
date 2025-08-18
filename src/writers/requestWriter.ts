@@ -2,7 +2,7 @@ import { Discussion } from '../engine/discussion.js';
 import { WriterConfig } from './discussionWriter.js';
 
 export async function writeRequestMarkdown(
-  discussion: Discussion,
+  _discussion: Discussion,
   config: WriterConfig
 ): Promise<string> {
   const { language, timestamp, prompt, includeAcceptanceCriteria = true } = config;

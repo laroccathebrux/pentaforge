@@ -15,7 +15,7 @@ export class ScrumMaster extends Persona {
   }
 
   async generateResponse(context: PersonaContext): Promise<string> {
-    const { prompt, language } = context;
+    const { language } = context;
     
     if (language === 'pt' || language === 'pt-BR') {
       return this.generatePortugueseResponse(context);
@@ -25,7 +25,7 @@ export class ScrumMaster extends Persona {
   }
 
   private generateEnglishResponse(context: PersonaContext): string {
-    const { prompt, previousTurns } = context;
+    const { previousTurns } = context;
     const poInput = this.findPreviousTurn(previousTurns, 'Product Owner');
     
     let response = `For delivery coordination, `;
@@ -56,7 +56,7 @@ export class ScrumMaster extends Persona {
   }
 
   private generatePortugueseResponse(context: PersonaContext): string {
-    const { prompt, previousTurns } = context;
+    const { previousTurns } = context;
     const poInput = this.findPreviousTurn(previousTurns, 'Product Owner');
     
     let response = `Para coordenação de entrega, `;

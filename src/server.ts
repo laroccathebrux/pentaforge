@@ -2,6 +2,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { runRoundtableTool } from './tools/roundtable.js';
 import { log } from './lib/log.js';
 
@@ -18,12 +19,12 @@ async function main(): Promise<void> {
     }
   );
 
-  server.setRequestHandler('tools/list', async () => ({
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [runRoundtableTool],
   }));
 
-  server.setRequestHandler('tools/call', async (request) => {
-    const { name, arguments: args } = request.params;
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params!;
 
     if (name === 'run_roundtable') {
       try {

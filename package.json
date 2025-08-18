@@ -16,7 +16,7 @@
   "author": "PentaForge Team",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.2"
+    "@modelcontextprotocol/sdk": "^1.17.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

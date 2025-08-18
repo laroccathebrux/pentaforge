@@ -15,7 +15,7 @@ export class SolutionsArchitect extends Persona {
   }
 
   async generateResponse(context: PersonaContext): Promise<string> {
-    const { prompt, language } = context;
+    const { language } = context;
     
     if (language === 'pt' || language === 'pt-BR') {
       return this.generatePortugueseResponse(context);
@@ -25,7 +25,7 @@ export class SolutionsArchitect extends Persona {
   }
 
   private generateEnglishResponse(context: PersonaContext): string {
-    const { prompt, previousTurns } = context;
+    const { previousTurns } = context;
     const baInput = this.findPreviousTurn(previousTurns, 'Business Analyst');
     const smInput = this.findPreviousTurn(previousTurns, 'Scrum Master');
     
@@ -58,7 +58,7 @@ export class SolutionsArchitect extends Persona {
   }
 
   private generatePortugueseResponse(context: PersonaContext): string {
-    const { prompt, previousTurns } = context;
+    const { previousTurns } = context;
     const baInput = this.findPreviousTurn(previousTurns, 'Business Analyst');
     const smInput = this.findPreviousTurn(previousTurns, 'Scrum Master');
     

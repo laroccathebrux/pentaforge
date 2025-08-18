@@ -15,7 +15,7 @@ export class BusinessAnalyst extends Persona {
   }
 
   async generateResponse(context: PersonaContext): Promise<string> {
-    const { prompt, language } = context;
+    const { language } = context;
     
     if (language === 'pt' || language === 'pt-BR') {
       return this.generatePortugueseResponse(context);
