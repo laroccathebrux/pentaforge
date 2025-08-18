@@ -34,7 +34,15 @@ npm run lint
 
 # Docker commands
 docker build -t pentaforge:latest .
+
+# For MCP clients (like Claude Code) - automatic networking
 docker run -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
+
+# For local development with Ollama, use host networking
+docker run --network host -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
+
+# Or override AI service configuration
+docker run -e AI_PROVIDER=openai -e AI_API_KEY=your_key -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
 ```
 
 ## Architecture Overview
@@ -65,6 +73,12 @@ Auto-detects Portuguese vs English from input prompt. All personas and outputs a
 
 ## Key Integration Points
 
+### Project Context Integration
+Before starting discussions, PentaForge automatically reads:
+- `CLAUDE.md` from the client's project directory (if present)
+- All documentation files in `docs/` directory and subdirectories (.md, .txt, .rst, .adoc, .org)
+- Provides this context to all personas for more relevant, project-specific responses
+
 ### MCP Tool Interface
 The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. It accepts:
 - `prompt` (required): The problem statement
@@ -81,6 +95,9 @@ All file operations use atomic writes through `src/lib/fs.ts` to prevent corrupt
 - Default output directory: `/app/PRPs/inputs`
 - Volume mapping required for persistence
 - Uses stdio, no ports exposed
+- **Automatic Docker networking**: Detects containerized environment and uses `host.docker.internal:11434` for Ollama
+- Falls back to hardcoded responses if AI service unavailable
+- For MCP clients like Claude Code, networking is automatically handled
 
 ## AI Configuration
 

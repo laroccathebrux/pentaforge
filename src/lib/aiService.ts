@@ -147,7 +147,7 @@ export class AIService {
   }
 
   private async callOllama(messages: AIMessage[]): Promise<AIResponse> {
-    const baseURL = this.config.baseURL || 'http://localhost:11434';
+    const baseURL = this.config.baseURL || this.getOllamaBaseURL();
     
     const response = await fetch(`${baseURL}/api/chat`, {
       method: 'POST',
@@ -181,6 +181,28 @@ export class AIService {
     return {
       content: data.message.content as string,
     };
+  }
+
+  private getOllamaBaseURL(): string {
+    // Try different URLs based on environment
+    // 1. Environment variable (highest priority)
+    if (process.env.AI_BASE_URL) {
+      return process.env.AI_BASE_URL;
+    }
+    
+    // 2. Check if we're in Docker by looking for containerized environment
+    const isDocker = process.env.DOCKER_CONTAINER || 
+                     process.env.container || 
+                     require('fs').existsSync('/.dockerenv');
+    
+    if (isDocker) {
+      // In Docker, try host.docker.internal first, then localhost
+      log.debug('🐳 Detected Docker environment, using host.docker.internal for Ollama');
+      return 'http://host.docker.internal:11434';
+    }
+    
+    // 3. Default to localhost for native execution
+    return 'http://localhost:11434';
   }
 }
 

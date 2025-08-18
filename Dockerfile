@@ -35,6 +35,17 @@ ENV TZ=UTC
 ENV LANG=en_US.UTF-8
 ENV LOG_LEVEL=INFO
 
+# AI Service Configuration
+# Default to Ollama with host.docker.internal for Docker networking
+ENV AI_PROVIDER=ollama
+ENV AI_BASE_URL=http://host.docker.internal:11434
+ENV AI_MODEL=mistral:latest
+ENV AI_TEMPERATURE=0.7
+ENV AI_MAX_TOKENS=500
+
+# Docker environment marker for automatic network detection
+ENV DOCKER_CONTAINER=true
+
 # Copy package files
 COPY --chown=pentaforge:pentaforge package*.json ./
 
