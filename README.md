@@ -186,33 +186,51 @@ claude mcp add pentaforge -- node /path/to/pentaforge/dist/server.js
 
 ## Usage
 
-Once registered with Claude Code, you can invoke the `run_roundtable` tool:
+Once registered with Claude Code, you can use PentaForge by having a natural conversation. Claude Code will automatically call the `run_roundtable` tool when appropriate.
+
+### Natural Language Example
+
+Simply describe your development need in a conversation with Claude Code:
+
+```
+You: "My TodoApp does not persist the data. As a user, I need to persist the data using LocalStorage so that my todos don't disappear when I refresh the page."
+
+Claude Code: I'll help you create a comprehensive specification for adding LocalStorage persistence to your TodoApp. Let me organize a roundtable discussion with expert personas to analyze this requirement.
+
+[Claude Code automatically calls the run_roundtable tool]
+
+Claude Code: The expert roundtable has completed their discussion! Here's what they recommend:
+
+[Shows the generated DISCUSSION.md and REQUEST.md with detailed specifications, technical recommendations, and implementation guidance for LocalStorage persistence]
+```
+
+### Manual Tool Call (Advanced)
+
+If you need to call the tool manually with specific parameters:
 
 ### Basic Usage
 ```json
 {
-  "prompt": "In my Todo app, items are lost on refresh. I need data persistence across sessions.",
+  "prompt": "My TodoApp does not persist the data. As a user, I need to persist the data using LocalStorage.",
   "outputDir": "./PRPs/inputs",
-  "language": "en",
-  "tone": "professional",
-  "includeAcceptanceCriteria": true,
-  "model": "deepseek-coder:latest"
+  "language": "en", 
+  "dryRun": true
 }
 ```
 
 ### Usage with Project Context (Recommended)
 ```json
 {
-  "prompt": "Add user authentication to my React app",
-  "claudeMd": "# My Todo App\n\nThis is a React application with Express.js backend.\n\n## Architecture\n- Frontend: React 18 with TypeScript\n- Backend: Express.js with MongoDB\n- Authentication: Currently none (to be implemented)",
+  "prompt": "My TodoApp does not persist the data. As a user, I need to persist the data using LocalStorage.",
+  "claudeMd": "# My TodoApp\n\nThis is a React application for managing personal tasks.\n\n## Current Architecture\n- Frontend: React 18 with TypeScript\n- State Management: useState hooks\n- Storage: Currently in-memory only (loses data on refresh)\n- Styling: Tailwind CSS",
   "docsContext": [
     {
-      "path": "docs/api.md",
-      "content": "# API Documentation\n\n## Endpoints\n- GET /api/todos - Get all todos\n- POST /api/todos - Create new todo\n- PUT /api/todos/:id - Update todo"
+      "path": "docs/components.md",
+      "content": "# Components\n\n## TodoList\nMain component that renders all todos\n- Props: todos[], onToggle(), onDelete()\n- State: Managed by parent App component"
     },
     {
-      "path": "docs/database.md", 
-      "content": "# Database Schema\n\n## Collections\n- todos: { id, title, completed, createdAt }"
+      "path": "docs/data-structure.md", 
+      "content": "# Data Structure\n\n## Todo Object\n```typescript\ninterface Todo {\n  id: string;\n  text: string;\n  completed: boolean;\n  createdAt: Date;\n}\n```"
     }
   ],
   "dryRun": true
@@ -259,6 +277,24 @@ PentaForge can use your project's existing documentation to generate more releva
 - Provide key documentation files (API docs, database schemas, setup guides)
 - Keep context focused - only include files directly relevant to the task
 - Update context when project architecture changes significantly
+
+### Current Limitation
+
+**Note:** Claude Code does not yet automatically read project files when calling MCP tools. To provide project context, you currently need to:
+
+1. **Manual Context (Workaround)**: Include your project information directly in the conversation:
+   ```
+   You: "Here's my project context:
+   
+   My CLAUDE.md says this is a React app with TypeScript...
+   My docs/api.md shows these endpoints: GET /api/todos, POST /api/todos...
+   
+   Now, my TodoApp does not persist data. As a user, I need LocalStorage persistence."
+   ```
+
+2. **Wait for Updates**: Future versions of Claude Code may automatically read and provide project files to MCP tools.
+
+The MCP server is ready to receive project context - it's just waiting for Claude Code to provide it!
 
 ## Example Output
 
