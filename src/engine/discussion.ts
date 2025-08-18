@@ -6,6 +6,8 @@ import { ScrumMaster } from '../personas/ScrumMaster.js';
 import { SolutionsArchitect } from '../personas/SolutionsArchitect.js';
 import { AIService } from '../lib/aiService.js';
 import { ProjectContext } from '../lib/contextReader.js';
+import { AIContentGenerator } from '../lib/aiContentGenerator.js';
+import { createAIServiceFromEnv } from '../lib/aiService.js';
 import { log } from '../lib/log.js';
 
 export interface DiscussionConfig {
@@ -121,78 +123,171 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     }
   }
 
-  discussion.decisions = extractDecisions(discussion);
-  discussion.nextSteps = extractNextSteps(discussion);
+  discussion.decisions = await extractDecisions(discussion);
+  discussion.nextSteps = await extractNextSteps(discussion);
 
   log.info('Discussion orchestration completed');
   return discussion;
 }
 
-function extractDecisions(discussion: Discussion): string[] {
-  const { language } = discussion.config;
+async function extractDecisions(discussion: Discussion): Promise<string[]> {
+  const { language, prompt } = discussion.config;
   const isPortuguese = language === 'pt' || language === 'pt-BR';
 
-  const decisions = [];
-
-  const architectTurns = discussion.rounds.filter(t => t.role === 'Solutions Architect');
-  const poTurns = discussion.rounds.filter(t => t.role === 'Product Owner');
-  const baTurns = discussion.rounds.filter(t => t.role === 'Business Analyst');
-
-  if (architectTurns.length > 0) {
-    const techDecision = isPortuguese
-      ? 'Usar IndexedDB com Dexie.js para persistência local e REST API com PostgreSQL para backend'
-      : 'Use IndexedDB with Dexie.js for local persistence and REST API with PostgreSQL for backend';
-    decisions.push(techDecision);
+  if (discussion.rounds.length === 0) {
+    log.debug('🎯 No discussion rounds, using AI to generate decisions...');
+    return await generateAIDecisions(prompt, language);
   }
 
-  if (poTurns.length > 0) {
-    const mvpDecision = isPortuguese
-      ? 'MVP em 2 sprints: Sprint 1 - persistência local, Sprint 2 - sincronização servidor'
-      : 'MVP in 2 sprints: Sprint 1 - local persistence, Sprint 2 - server sync';
-    decisions.push(mvpDecision);
+  try {
+    log.debug('🎯 Extracting decisions from discussion using AI...');
+    const aiGenerator = new AIContentGenerator(createAIServiceFromEnv());
+    
+    // Compile all discussion content
+    const discussionContent = discussion.rounds
+      .map(turn => `${turn.role}: ${turn.content}`)
+      .join('\n\n');
+    
+    const decisionsPrompt = isPortuguese
+      ? `Baseado na discussão abaixo sobre "${prompt}", extraia as 3-5 decisões técnicas e de negócio mais importantes tomadas pela equipe. Liste cada decisão como um item separado e numerado.\n\nDiscussão:\n${discussionContent}`
+      : `Based on the discussion below about "${prompt}", extract the 3-5 most important technical and business decisions made by the team. List each decision as a separate numbered item.\n\nDiscussion:\n${discussionContent}`;
+
+    const decisionsContent = await aiGenerator.generateContent({
+      section: 'decisions',
+      prompt: decisionsPrompt,
+      language,
+      maxWords: 100
+    });
+
+    // Parse the AI response into individual decisions
+    const decisions = decisionsContent
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => line.replace(/^\d+\.\s*/, '').trim())
+      .filter(decision => decision.length > 10);
+
+    return decisions.length > 0 ? decisions : await generateAIDecisions(prompt, language);
+  } catch (error) {
+    log.warn('🚨 Failed to extract decisions using AI, generating fallback decisions');
+    return await generateAIDecisions(prompt, language);
   }
-
-  if (baTurns.length > 0) {
-    const reqDecision = isPortuguese
-      ? 'Auto-salvamento a cada 2 segundos com indicador visual e recuperação de dados'
-      : 'Auto-save every 2 seconds with visual indicator and data recovery';
-    decisions.push(reqDecision);
-  }
-
-  const conflictDecision = isPortuguese
-    ? 'Resolução de conflitos via last-write-wins com vetores de versão'
-    : 'Conflict resolution via last-write-wins with version vectors';
-  decisions.push(conflictDecision);
-
-  const metricsDecision = isPortuguese
-    ? 'Métricas de sucesso: 99,9% retenção de dados, <2s latência, zero perda de dados reportada'
-    : 'Success metrics: 99.9% data retention, <2s latency, zero reported data loss';
-  decisions.push(metricsDecision);
-
-  return decisions;
 }
 
-function extractNextSteps(discussion: Discussion): string[] {
-  const { language } = discussion.config;
-  const isPortuguese = language === 'pt' || language === 'pt-BR';
+async function generateAIDecisions(prompt: string, language: string): Promise<string[]> {
+  try {
+    const aiGenerator = new AIContentGenerator(createAIServiceFromEnv());
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
+    
+    const decisionsPrompt = isPortuguese
+      ? `Para o projeto "${prompt}", liste 3-5 decisões técnicas e de negócio importantes que uma equipe deve tomar. Use formato de lista numerada.`
+      : `For the project "${prompt}", list 3-5 important technical and business decisions that a team should make. Use numbered list format.`;
 
-  if (isPortuguese) {
+    const decisionsContent = await aiGenerator.generateContent({
+      section: 'project_decisions',
+      prompt: decisionsPrompt,
+      language,
+      maxWords: 100
+    });
+
+    const decisions = decisionsContent
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => line.replace(/^\d+\.\s*/, '').trim())
+      .filter(decision => decision.length > 10);
+
+    return decisions.length > 0 ? decisions : [
+      isPortuguese 
+        ? 'Decisões técnicas devem ser baseadas nos requisitos do projeto'
+        : 'Technical decisions should be based on project requirements'
+    ];
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI decisions, using minimal fallback');
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
     return [
-      'Criar spike técnico para validar compatibilidade IndexedDB',
-      'Definir contratos de API com equipe backend',
-      'Configurar ambiente de desenvolvimento com Dexie.js',
-      'Implementar prova de conceito de auto-salvamento',
-      'Preparar plano de testes para cenários de perda de dados',
-      'Documentar estratégia de migração de dados existentes',
+      isPortuguese 
+        ? 'Decisões técnicas devem ser baseadas nos requisitos do projeto'
+        : 'Technical decisions should be based on project requirements'
     ];
   }
+}
 
-  return [
-    'Create technical spike to validate IndexedDB compatibility',
-    'Define API contracts with backend team',
-    'Setup development environment with Dexie.js',
-    'Implement auto-save proof of concept',
-    'Prepare test plan for data loss scenarios',
-    'Document migration strategy for existing data',
-  ];
+async function extractNextSteps(discussion: Discussion): Promise<string[]> {
+  const { language, prompt } = discussion.config;
+  const isPortuguese = language === 'pt' || language === 'pt-BR';
+
+  if (discussion.rounds.length === 0) {
+    log.debug('🎯 No discussion rounds, using AI to generate next steps...');
+    return await generateAINextSteps(prompt, language);
+  }
+
+  try {
+    log.debug('🎯 Extracting next steps from discussion using AI...');
+    const aiGenerator = new AIContentGenerator(createAIServiceFromEnv());
+    
+    // Compile all discussion content
+    const discussionContent = discussion.rounds
+      .map(turn => `${turn.role}: ${turn.content}`)
+      .join('\n\n');
+    
+    const nextStepsPrompt = isPortuguese
+      ? `Baseado na discussão abaixo sobre "${prompt}", liste os 4-6 próximos passos mais importantes que a equipe deve tomar para implementar o projeto. Use formato de lista numerada.\n\nDiscussão:\n${discussionContent}`
+      : `Based on the discussion below about "${prompt}", list the 4-6 most important next steps the team should take to implement the project. Use numbered list format.\n\nDiscussion:\n${discussionContent}`;
+
+    const nextStepsContent = await aiGenerator.generateContent({
+      section: 'next_steps',
+      prompt: nextStepsPrompt,
+      language,
+      maxWords: 120
+    });
+
+    // Parse the AI response into individual next steps
+    const nextSteps = nextStepsContent
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => line.replace(/^\d+\.\s*/, '').trim())
+      .filter(step => step.length > 10);
+
+    return nextSteps.length > 0 ? nextSteps : await generateAINextSteps(prompt, language);
+  } catch (error) {
+    log.warn('🚨 Failed to extract next steps using AI, generating fallback steps');
+    return await generateAINextSteps(prompt, language);
+  }
+}
+
+async function generateAINextSteps(prompt: string, language: string): Promise<string[]> {
+  try {
+    const aiGenerator = new AIContentGenerator(createAIServiceFromEnv());
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
+    
+    const nextStepsPrompt = isPortuguese
+      ? `Para implementar o projeto "${prompt}", liste 4-6 próximos passos práticos que uma equipe de desenvolvimento deve seguir. Use formato de lista numerada.`
+      : `To implement the project "${prompt}", list 4-6 practical next steps that a development team should follow. Use numbered list format.`;
+
+    const nextStepsContent = await aiGenerator.generateContent({
+      section: 'implementation_steps',
+      prompt: nextStepsPrompt,
+      language,
+      maxWords: 120
+    });
+
+    const nextSteps = nextStepsContent
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => line.replace(/^\d+\.\s*/, '').trim())
+      .filter(step => step.length > 10);
+
+    return nextSteps.length > 0 ? nextSteps : [
+      isPortuguese 
+        ? 'Definir próximos passos baseados nos requisitos do projeto'
+        : 'Define next steps based on project requirements'
+    ];
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI next steps, using minimal fallback');
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
+    return [
+      isPortuguese 
+        ? 'Definir próximos passos baseados nos requisitos do projeto'
+        : 'Define next steps based on project requirements'
+    ];
+  }
 }
