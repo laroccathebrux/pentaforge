@@ -30,12 +30,20 @@ export abstract class AIPersona extends Persona {
       log.debug(`✅ ${this.role}: AI response generated successfully (${response.content.split(' ').length} words)`);
       return this.limitWords(response.content, 120);
     } catch (error) {
-      log.warn(`🚨 AI persona ${this.role} failed, using fallback response. Error: ${error}`);
-      log.debug(`🔄 ${this.role}: Switching to hardcoded fallback response`);
-      // Fallback to hardcoded response if AI fails
-      const fallbackResponse = this.generateFallbackResponse(context);
-      log.debug(`📝 ${this.role}: Fallback response generated (${fallbackResponse.split(' ').length} words)`);
-      return fallbackResponse;
+      log.warn(`🚨 AI persona ${this.role} failed, attempting AI fallback response. Error: ${error}`);
+      log.debug(`🔄 ${this.role}: Switching to AI-generated fallback response`);
+      
+      // First try: Generate AI response with simpler prompt
+      try {
+        const fallbackResponse = await this.generateAIFallbackResponse(context);
+        log.debug(`🤖 ${this.role}: AI fallback response generated (${fallbackResponse.split(' ').length} words)`);
+        return fallbackResponse;
+      } catch (fallbackError) {
+        log.warn(`🚨 ${this.role}: AI fallback also failed, using minimal hardcoded response. Error: ${fallbackError}`);
+        const hardcodedResponse = this.generateFallbackResponse(context);
+        log.debug(`📝 ${this.role}: Hardcoded fallback response generated (${hardcodedResponse.split(' ').length} words)`);
+        return hardcodedResponse;
+      }
     }
   }
 
@@ -135,9 +143,33 @@ Diretrizes da discussão:
 Formato da resposta: Forneça uma resposta em parágrafo único que aborde diretamente o requisito da perspectiva do seu papel.`;
   }
 
+  // AI fallback method with simpler prompt
+  private async generateAIFallbackResponse(context: PersonaContext): Promise<string> {
+    const { prompt, language } = context;
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
+
+    const messages: AIMessage[] = [
+      {
+        role: 'system',
+        content: isPortuguese
+          ? `Você é ${this.role}. Responda de forma profissional e concisa (máx 80 palavras) sobre o requisito apresentado.`
+          : `You are a ${this.role}. Respond professionally and concisely (max 80 words) about the presented requirement.`
+      },
+      {
+        role: 'user',
+        content: isPortuguese
+          ? `Como ${this.role}, analise brevemente: ${prompt}`
+          : `As ${this.role}, briefly analyze: ${prompt}`
+      }
+    ];
+
+    const response = await this.aiService.generateResponse(messages);
+    return this.limitWords(response.content, 80);
+  }
+
   // Abstract method for persona-specific instructions
   protected abstract getPersonaSpecificInstructions(isPortuguese: boolean): string;
 
-  // Fallback method for when AI fails
+  // Minimal fallback method for when AI completely fails
   protected abstract generateFallbackResponse(context: PersonaContext): string;
 }

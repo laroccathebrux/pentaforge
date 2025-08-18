@@ -35,29 +35,12 @@ export class KeyUser extends AIPersona {
   }
 
   protected generateFallbackResponse(context: PersonaContext): string {
-    const { language, previousTurns } = context;
+    const { language } = context;
     const isPortuguese = language === 'pt' || language === 'pt-BR';
     
-    let response = isPortuguese 
-      ? `Como usuário que enfrenta este problema diariamente, `
-      : `As someone who experiences this problem daily, `;
-    
-    if (previousTurns.length === 0) {
-      if (isPortuguese) {
-        response += `o problema causa atrito significativo. A solução deve ser intuitiva, `;
-        response += `funcionar perfeitamente ao atualizar página e fornecer feedback claro.`;
-      } else {
-        response += `the issue causes significant friction. The solution must be intuitive, `;
-        response += `work seamlessly on page refresh, and provide clear feedback.`;
-      }
-    } else {
-      if (isPortuguese) {
-        response += `concordo com a análise. O mais crítico é confiabilidade - preciso de confirmação visual de salvamento.`;
-      } else {
-        response += `I agree with the analysis. Most critical is reliability - I need visual confirmation of saves.`;
-      }
-    }
-    
-    return this.limitWords(response);
+    // Minimal fallback - only used when all AI attempts fail
+    return isPortuguese 
+      ? `Como usuário, preciso que a solução seja intuitiva e confiável para uso diário.`
+      : `As a user, I need the solution to be intuitive and reliable for daily use.`;
   }
 }

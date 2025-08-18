@@ -35,29 +35,12 @@ export class ProductOwner extends AIPersona {
   }
 
   protected generateFallbackResponse(context: PersonaContext): string {
-    const { language, previousTurns } = context;
+    const { language } = context;
     const isPortuguese = language === 'pt' || language === 'pt-BR';
     
-    let response = isPortuguese 
-      ? `Da perspectiva do produto, `
-      : `From a product perspective, `;
-    
-    if (previousTurns.length < 2) {
-      if (isPortuguese) {
-        response += `esta funcionalidade impacta diretamente retenção do usuário. `;
-        response += `Prioridade ALTA. MVP: armazenamento local, auto-save, indicador visual.`;
-      } else {
-        response += `this feature directly impacts user retention. `;
-        response += `HIGH priority. MVP: local storage, auto-save, visual indicator.`;
-      }
-    } else {
-      if (isPortuguese) {
-        response += `alinhando MVP com necessidades imediatas. Release faseado reduz risco e entrega valor.`;
-      } else {
-        response += `aligning MVP with immediate needs. Phased release reduces risk and delivers value.`;
-      }
-    }
-    
-    return this.limitWords(response);
+    // Minimal fallback - only used when all AI attempts fail
+    return isPortuguese 
+      ? `Do ponto de vista do produto, precisamos priorizar funcionalidades que entreguem valor ao usuário.`
+      : `From a product perspective, we need to prioritize functionality that delivers user value.`;
   }
 }

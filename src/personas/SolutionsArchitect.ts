@@ -35,29 +35,12 @@ export class SolutionsArchitect extends AIPersona {
   }
 
   protected generateFallbackResponse(context: PersonaContext): string {
-    const { language, previousTurns } = context;
+    const { language } = context;
     const isPortuguese = language === 'pt' || language === 'pt-BR';
     
-    let response = isPortuguese ? `Arquiteturalmente, ` : `Architecturally, `;
-    
-    if (previousTurns.length === 0) {
-      if (isPortuguese) {
-        response += `proponho arquitetura com separação camadas: apresentação, negócio, dados. `;
-        response += `Tecnologias: API REST, banco relacional, cache Redis. `;
-        response += `RNFs: performance <500ms, segurança HTTPS/JWT, escalabilidade horizontal.`;
-      } else {
-        response += `I propose layered architecture: presentation, business, data layers. `;
-        response += `Technologies: REST API, relational database, Redis cache. `;
-        response += `NFRs: <500ms performance, HTTPS/JWT security, horizontal scalability.`;
-      }
-    } else {
-      if (isPortuguese) {
-        response += `baseado na discussão, defino modelo de dados, contratos API e estratégias integração para atender requisitos técnicos.`;
-      } else {
-        response += `based on discussion, I define data models, API contracts, and integration strategies to meet technical requirements.`;
-      }
-    }
-    
-    return this.limitWords(response);
+    // Minimal fallback - only used when all AI attempts fail
+    return isPortuguese 
+      ? `Como arquiteto de soluções, preciso definir arquitetura robusta e escolher tecnologias adequadas.`
+      : `As solutions architect, I need to define robust architecture and choose appropriate technologies.`;
   }
 }

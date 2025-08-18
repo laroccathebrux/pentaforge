@@ -1,6 +1,9 @@
 import { Discussion } from '../engine/discussion.js';
 import { WriterConfig } from './discussionWriter.js';
 import { Turn } from '../personas/base.js';
+import { AIContentGenerator } from '../lib/aiContentGenerator.js';
+import { createAIServiceFromEnv } from '../lib/aiService.js';
+import { log } from '../lib/log.js';
 
 export async function writeRequestMarkdown(
   discussion: Discussion,
@@ -8,6 +11,9 @@ export async function writeRequestMarkdown(
 ): Promise<string> {
   const { language, timestamp, prompt, includeAcceptanceCriteria = true } = config;
   const isPortuguese = language === 'pt' || language === 'pt-BR';
+
+  // Initialize AI content generator for fallback content
+  const aiGenerator = new AIContentGenerator(createAIServiceFromEnv());
 
   const lines: string[] = [];
 
@@ -36,18 +42,36 @@ export async function writeRequestMarkdown(
     });
     lines.push('');
   } else {
-    // Fallback to generic content
-    lines.push(`### ${isPortuguese ? 'Atual' : 'Current'}`);
-    lines.push(isPortuguese
-      ? '- Dados são perdidos ao atualizar a página'
-      : '- Data is lost on page refresh'
-    );
-    lines.push(`### ${isPortuguese ? 'Desejado' : 'Desired'}`);
-    lines.push(isPortuguese
-      ? '- Dados persistem automaticamente'
-      : '- Data persists automatically'
-    );
-    lines.push('');
+    // AI-generated content based on prompt
+    try {
+      log.debug('🎯 Generating AI content for Current vs Desired behavior...');
+      const currentVsDesiredContent = await aiGenerator.generateSectionContent(
+        'current_vs_desired',
+        prompt,
+        language
+      );
+      
+      lines.push(`### ${isPortuguese ? 'Atual' : 'Current'}`);
+      lines.push('- ' + currentVsDesiredContent.content.split('\n')[0]);
+      lines.push(`### ${isPortuguese ? 'Desejado' : 'Desired'}`);
+      lines.push('- ' + (currentVsDesiredContent.content.split('\n')[1] || (isPortuguese 
+        ? 'Sistema implementa solução para o problema apresentado'
+        : 'System implements solution for the presented problem')));
+      lines.push('');
+    } catch (error) {
+      log.warn('🚨 Failed to generate AI content for Current vs Desired, using minimal fallback');
+      lines.push(`### ${isPortuguese ? 'Atual' : 'Current'}`);
+      lines.push(isPortuguese
+        ? '- Sistema atual não atende às necessidades descritas'
+        : '- Current system does not meet described needs'
+      );
+      lines.push(`### ${isPortuguese ? 'Desejado' : 'Desired'}`);
+      lines.push(isPortuguese
+        ? '- Sistema implementa solução para o problema apresentado'
+        : '- System implements solution for the presented problem'
+      );
+      lines.push('');
+    }
   }
 
   // Business Goals - Extract from Product Owner perspective
@@ -60,50 +84,69 @@ export async function writeRequestMarkdown(
     });
     lines.push('');
   } else {
-    // Fallback content
+    // AI-generated business goals content
+    try {
+      log.debug('🎯 Generating AI content for Business Goals...');
+      const businessGoalsContent = await aiGenerator.generateSectionContent(
+        'business_goals',
+        prompt,
+        language
+      );
+      
+      lines.push(`- **${isPortuguese ? 'Objetivo Principal' : 'Primary Goal'}:** ${businessGoalsContent.content}`);
+      lines.push('');
+    } catch (error) {
+      log.warn('🚨 Failed to generate AI content for Business Goals, using minimal fallback');
+      lines.push(isPortuguese
+        ? '- **Objetivo Principal:** Implementar solução eficaz para o problema apresentado'
+        : '- **Primary Goal:** Implement effective solution for the presented problem'
+      );
+      lines.push('');
+    }
+  }
+
+  // Scope - AI-generated content
+  lines.push(`## ${isPortuguese ? 'Escopo' : 'Scope'}`);
+  lines.push('');
+  
+  try {
+    log.debug('🎯 Generating AI content for Scope...');
+    const scopeContent = await aiGenerator.generateSectionContent(
+      'scope',
+      prompt,
+      language
+    );
+    
+    const scopeLines = scopeContent.content.split('\n').filter(line => line.trim());
+    const midPoint = Math.ceil(scopeLines.length / 2);
+    
+    lines.push(`### ${isPortuguese ? 'Dentro do Escopo' : 'In Scope'}`);
+    scopeLines.slice(0, midPoint).forEach(line => {
+      lines.push(`- ${line.trim()}`);
+    });
+    lines.push('');
+    
+    lines.push(`### ${isPortuguese ? 'Fora do Escopo' : 'Out of Scope'}`);
+    scopeLines.slice(midPoint).forEach(line => {
+      lines.push(`- ${line.trim()}`);
+    });
+    lines.push('');
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI content for Scope, using minimal fallback');
+    lines.push(`### ${isPortuguese ? 'Dentro do Escopo' : 'In Scope'}`);
     lines.push(isPortuguese
-      ? '- **Objetivo Principal:** Eliminar perda de dados e aumentar confiança do usuário'
-      : '- **Primary Goal:** Eliminate data loss and increase user trust'
+      ? '- Funcionalidades centrais identificadas na discussão'
+      : '- Core functionality identified in discussion'
+    );
+    lines.push('');
+    
+    lines.push(`### ${isPortuguese ? 'Fora do Escopo' : 'Out of Scope'}`);
+    lines.push(isPortuguese
+      ? '- Funcionalidades avançadas para fases futuras'
+      : '- Advanced features for future phases'
     );
     lines.push('');
   }
-
-  // Scope
-  lines.push(`## ${isPortuguese ? 'Escopo' : 'Scope'}`);
-  lines.push('');
-  lines.push(`### ${isPortuguese ? 'Dentro do Escopo' : 'In Scope'}`);
-  lines.push(isPortuguese
-    ? '- Persistência local usando IndexedDB'
-    : '- Local persistence using IndexedDB'
-  );
-  lines.push(isPortuguese
-    ? '- Auto-salvamento com debounce'
-    : '- Auto-save with debounce'
-  );
-  lines.push(isPortuguese
-    ? '- Indicador visual de status de salvamento'
-    : '- Visual save status indicator'
-  );
-  lines.push(isPortuguese
-    ? '- Sincronização com servidor (fase 2)'
-    : '- Server synchronization (phase 2)'
-  );
-  lines.push('');
-  
-  lines.push(`### ${isPortuguese ? 'Fora do Escopo' : 'Out of Scope'}`);
-  lines.push(isPortuguese
-    ? '- Colaboração em tempo real'
-    : '- Real-time collaboration'
-  );
-  lines.push(isPortuguese
-    ? '- Versionamento avançado de documentos'
-    : '- Advanced document versioning'
-  );
-  lines.push(isPortuguese
-    ? '- Sincronização offline complexa'
-    : '- Complex offline sync'
-  );
-  lines.push('');
 
   // Technical Requirements - Extract from Solutions Architect and Business Analyst
   const techInsights = getPersonaInsights(discussion.rounds, 'Solutions Architect');
@@ -127,143 +170,163 @@ export async function writeRequestMarkdown(
     lines.push('');
   }
   
-  // If no AI insights available, use fallback
+  // If no AI insights available, generate AI-powered technical requirements
   if (techInsights.length === 0 && requirementInsights.length === 0) {
+    try {
+      log.debug('🎯 Generating AI content for Technical Requirements...');
+      const techRequirementsContent = await aiGenerator.generateSectionContent(
+        'technical_requirements',
+        prompt,
+        language
+      );
+      
+      const techLines = techRequirementsContent.content.split('\n').filter(line => line.trim());
+      techLines.forEach((line, index) => {
+        lines.push(`${index + 1}. ${line.trim()}`);
+      });
+      lines.push('');
+    } catch (error) {
+      log.warn('🚨 Failed to generate AI content for Technical Requirements, using minimal fallback');
+      lines.push(isPortuguese
+        ? '1. Sistema deve implementar solução robusta e escalável'
+        : '1. System shall implement robust and scalable solution'
+      );
+      lines.push(isPortuguese
+        ? '2. Arquitetura deve seguir melhores práticas da indústria'
+        : '2. Architecture should follow industry best practices'
+      );
+      lines.push('');
+    }
+  }
+
+  // NFRs - AI-generated requirements
+  lines.push(`## ${isPortuguese ? 'Requisitos Não-Funcionais' : 'Non-Functional Requirements'}`);
+  lines.push('');
+  
+  try {
+    log.debug('🎯 Generating AI content for Non-Functional Requirements...');
+    const nfrsContent = await aiGenerator.generateSectionContent(
+      'nfrs',
+      prompt,
+      language
+    );
+    
+    const nfrLines = nfrsContent.content.split('\n').filter(line => line.trim());
+    nfrLines.forEach(line => {
+      lines.push(`- ${line.trim()}`);
+    });
+    lines.push('');
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI content for NFRs, using minimal fallback');
     lines.push(isPortuguese
-      ? '1. Sistema deve salvar dados automaticamente'
-      : '1. System shall auto-save data automatically'
+      ? '- **Performance:** Sistema deve responder em tempo aceitável para usuários'
+      : '- **Performance:** System must respond within acceptable time for users'
+    );
+    lines.push(isPortuguese
+      ? '- **Segurança:** Implementar medidas adequadas de proteção de dados'
+      : '- **Security:** Implement adequate data protection measures'
+    );
+    lines.push(isPortuguese
+      ? '- **Confiabilidade:** Sistema deve funcionar de forma consistente'
+      : '- **Reliability:** System must function consistently'
     );
     lines.push('');
   }
 
-  // NFRs
-  lines.push(`## ${isPortuguese ? 'Requisitos Não-Funcionais' : 'Non-Functional Requirements'}`);
-  lines.push('');
-  lines.push(isPortuguese
-    ? '- **Performance:** Salvamento local < 100ms, sincronização servidor < 500ms'
-    : '- **Performance:** Local save < 100ms, server sync < 500ms'
-  );
-  lines.push(isPortuguese
-    ? '- **Segurança:** Criptografia em repouso e trânsito, autenticação JWT'
-    : '- **Security:** Encryption at rest and in transit, JWT authentication'
-  );
-  lines.push(isPortuguese
-    ? '- **Confiabilidade:** 99,99% disponibilidade, zero perda de dados'
-    : '- **Reliability:** 99.99% availability, zero data loss'
-  );
-  lines.push(isPortuguese
-    ? '- **Escalabilidade:** Suportar 10K usuários concorrentes'
-    : '- **Scalability:** Support 10K concurrent users'
-  );
-  lines.push('');
-
-  // Data Model
+  // Data Model - AI-generated structure
   lines.push(`## ${isPortuguese ? 'Modelo de Dados e Estratégia de Persistência' : 'Data Model & Persistence Strategy'}`);
   lines.push('');
-  lines.push('```typescript');
-  lines.push('interface TodoItem {');
-  lines.push('  id: string;           // UUID v4');
-  lines.push('  content: any;         // JSON payload');
-  lines.push('  version: number;      // Optimistic locking');
-  lines.push('  lastModified: Date;   // ISO 8601');
-  lines.push('  syncStatus: "pending" | "synced" | "conflict";');
-  lines.push('  userId: string;       // User identifier');
-  lines.push('}');
-  lines.push('```');
-  lines.push('');
-  lines.push(`**${isPortuguese ? 'Estratégia' : 'Strategy'}:**`);
-  lines.push(isPortuguese
-    ? '- IndexedDB para armazenamento primário (Dexie.js wrapper)'
-    : '- IndexedDB for primary storage (Dexie.js wrapper)'
-  );
-  lines.push(isPortuguese
-    ? '- PostgreSQL com coluna JSONB para backend'
-    : '- PostgreSQL with JSONB column for backend'
-  );
-  lines.push(isPortuguese
-    ? '- Event sourcing para auditoria e recuperação'
-    : '- Event sourcing for audit and recovery'
-  );
-  lines.push('');
+  
+  try {
+    log.debug('🎯 Generating AI content for Data Model...');
+    const dataModelContent = await aiGenerator.generateSectionContent(
+      'data_model',
+      prompt,
+      language
+    );
+    
+    lines.push(dataModelContent.content);
+    lines.push('');
+  } catch (error) {
+    log.warn('🚨 Failed to generate AI content for Data Model, using minimal fallback');
+    lines.push(`**${isPortuguese ? 'Estrutura de Dados' : 'Data Structure'}:**`);
+    lines.push(isPortuguese
+      ? '- Definir entidades e relacionamentos baseados nos requisitos'
+      : '- Define entities and relationships based on requirements'
+    );
+    lines.push('');
+    lines.push(`**${isPortuguese ? 'Estratégia de Persistência' : 'Persistence Strategy'}:**`);
+    lines.push(isPortuguese
+      ? '- Escolher tecnologia de banco adequada aos requisitos'
+      : '- Choose appropriate database technology for requirements'
+    );
+    lines.push('');
+  }
 
-  // API Points
+  // API Points - Generic structure
   lines.push(`## ${isPortuguese ? 'Pontos de Integração API' : 'API Integration Points'}`);
   lines.push('');
-  lines.push('```http');
-  lines.push('POST /api/todos/sync');
-  lines.push('Content-Type: application/json');
-  lines.push('Authorization: Bearer {token}');
-  lines.push('');
-  lines.push('{');
-  lines.push('  "items": [TodoItem],');
-  lines.push('  "clientTimestamp": "2024-01-01T00:00:00Z"');
-  lines.push('}');
-  lines.push('```');
-  lines.push('');
-  lines.push('```http');
-  lines.push('GET /api/todos/changes?since={timestamp}');
-  lines.push('Authorization: Bearer {token}');
-  lines.push('');
-  lines.push('Response: {');
-  lines.push('  "changes": [TodoItem],');
-  lines.push('  "deletions": [string],');
-  lines.push('  "serverTimestamp": "2024-01-01T00:00:00Z"');
-  lines.push('}');
-  lines.push('```');
+  lines.push(`**${isPortuguese ? 'Endpoints Necessários' : 'Required Endpoints'}:**`);
+  lines.push(isPortuguese
+    ? '- Definir endpoints baseados na funcionalidade requerida'
+    : '- Define endpoints based on required functionality'
+  );
+  lines.push(isPortuguese
+    ? '- Implementar autenticação e autorização adequadas'
+    : '- Implement appropriate authentication and authorization'
+  );
+  lines.push(isPortuguese
+    ? '- Seguir padrões REST/GraphQL conforme apropriado'
+    : '- Follow REST/GraphQL standards as appropriate'
+  );
   lines.push('');
 
-  // Acceptance Criteria
+  // Acceptance Criteria - Generic template
   if (includeAcceptanceCriteria) {
     lines.push(`## ${isPortuguese ? 'Critérios de Aceitação' : 'Acceptance Criteria'}`);
     lines.push('');
     lines.push('```gherkin');
-    lines.push(isPortuguese ? 'Funcionalidade: Persistência de Dados' : 'Feature: Data Persistence');
+    lines.push(isPortuguese ? 'Funcionalidade: Implementação da Solução' : 'Feature: Solution Implementation');
     lines.push('');
-    lines.push(isPortuguese ? '  Cenário: Auto-salvamento após mudanças' : '  Scenario: Auto-save after changes');
-    lines.push(isPortuguese ? '    Dado que estou editando um item' : '    Given I am editing an item');
-    lines.push(isPortuguese ? '    Quando eu paro de digitar por 2 segundos' : '    When I stop typing for 2 seconds');
-    lines.push(isPortuguese ? '    Então os dados devem ser salvos automaticamente' : '    Then the data should be saved automatically');
-    lines.push(isPortuguese ? '    E um indicador visual deve mostrar "Salvo"' : '    And a visual indicator should show "Saved"');
-    lines.push('');
-    lines.push(isPortuguese ? '  Cenário: Recuperação após refresh' : '  Scenario: Recovery after refresh');
-    lines.push(isPortuguese ? '    Dado que eu tenho dados não salvos' : '    Given I have unsaved data');
-    lines.push(isPortuguese ? '    Quando eu atualizo a página' : '    When I refresh the page');
-    lines.push(isPortuguese ? '    Então meus dados devem ser restaurados' : '    Then my data should be restored');
-    lines.push(isPortuguese ? '    E nenhum trabalho deve ser perdido' : '    And no work should be lost');
+    lines.push(isPortuguese ? '  Cenário: Funcionalidade principal' : '  Scenario: Core functionality');
+    lines.push(isPortuguese ? '    Dado que o usuário tem necessidades específicas' : '    Given user has specific needs');
+    lines.push(isPortuguese ? '    Quando o sistema é usado conforme especificado' : '    When system is used as specified');
+    lines.push(isPortuguese ? '    Então os requisitos devem ser atendidos' : '    Then requirements should be met');
+    lines.push(isPortuguese ? '    E a experiência deve ser satisfatória' : '    And experience should be satisfactory');
     lines.push('```');
     lines.push('');
   }
 
-  // Risks
+  // Risks - Generic considerations
   lines.push(`## ${isPortuguese ? 'Riscos e Premissas' : 'Risks & Assumptions'}`);
   lines.push('');
   lines.push(`### ${isPortuguese ? 'Riscos' : 'Risks'}`);
   lines.push(isPortuguese
-    ? '1. Incompatibilidade de navegador com IndexedDB (~5% dos usuários)'
-    : '1. Browser incompatibility with IndexedDB (~5% of users)'
+    ? '1. Dependências externas podem impactar funcionalidade'
+    : '1. External dependencies may impact functionality'
   );
   lines.push(isPortuguese
-    ? '2. Limites de cota de armazenamento podem ser atingidos'
-    : '2. Storage quota limits may be reached'
+    ? '2. Complexidade técnica pode afetar cronograma'
+    : '2. Technical complexity may affect timeline'
   );
   lines.push(isPortuguese
-    ? '3. Conflitos de sincronização em múltiplas abas'
-    : '3. Sync conflicts across multiple tabs'
+    ? '3. Mudanças de requisitos durante desenvolvimento'
+    : '3. Requirements changes during development'
   );
   lines.push('');
   
   lines.push(`### ${isPortuguese ? 'Premissas' : 'Assumptions'}`);
   lines.push(isPortuguese
-    ? '- Usuários têm navegadores modernos (Chrome 90+, Firefox 88+, Safari 14+)'
-    : '- Users have modern browsers (Chrome 90+, Firefox 88+, Safari 14+)'
+    ? '- Recursos necessários estarão disponíveis'
+    : '- Required resources will be available'
   );
   lines.push(isPortuguese
-    ? '- Dados por usuário < 10MB'
-    : '- Data per user < 10MB'
+    ? '- Usuários têm ambiente técnico adequado'
+    : '- Users have adequate technical environment'
   );
   lines.push(isPortuguese
-    ? '- Conexão de rede disponível para sincronização'
-    : '- Network connection available for sync'
+    ? '- Integrações necessárias são factíveis'
+    : '- Required integrations are feasible'
   );
   lines.push('');
 
@@ -278,11 +341,15 @@ export async function writeRequestMarkdown(
     });
     lines.push('');
   } else {
-    // Fallback content
-    lines.push(`### ${isPortuguese ? 'Sprint 1 (Semana 1-2)' : 'Sprint 1 (Week 1-2)'}`);
+    // Generic fallback content
+    lines.push(`### ${isPortuguese ? 'Estratégia de Entrega' : 'Delivery Strategy'}`);
     lines.push(isPortuguese
-      ? '- Implementar persistência local'
-      : '- Implement local persistence'
+      ? '- Dividir implementação em fases incrementais'
+      : '- Split implementation into incremental phases'
+    );
+    lines.push(isPortuguese
+      ? '- Priorizar funcionalidades core primeiro'
+      : '- Prioritize core functionality first'
     );
     lines.push('');
   }
@@ -293,30 +360,30 @@ export async function writeRequestMarkdown(
   
   lines.push(`### ${isPortuguese ? 'Objetivo da Feature' : 'Feature Goal'}`);
   lines.push(isPortuguese
-    ? 'Implementar persistência de dados confiável para eliminar perda de trabalho do usuário'
-    : 'Implement reliable data persistence to eliminate user work loss'
+    ? 'Implementar solução eficaz para resolver o problema apresentado'
+    : 'Implement effective solution to solve the presented problem'
   );
   lines.push('');
   
   lines.push(`### ${isPortuguese ? 'Entregável' : 'Deliverable'}`);
   lines.push(isPortuguese
-    ? 'Sistema de persistência com auto-salvamento, recuperação e sincronização'
-    : 'Persistence system with auto-save, recovery, and synchronization'
+    ? 'Sistema funcional que atende aos requisitos especificados'
+    : 'Functional system that meets specified requirements'
   );
   lines.push('');
   
   lines.push(`### ${isPortuguese ? 'Definição de Sucesso' : 'Success Definition'}`);
   lines.push('- [ ] ' + (isPortuguese 
-    ? 'Zero perda de dados reportada em produção'
-    : 'Zero data loss reported in production'
+    ? 'Requisitos funcionais implementados e testados'
+    : 'Functional requirements implemented and tested'
   ));
   lines.push('- [ ] ' + (isPortuguese
-    ? 'Latência de salvamento < 2 segundos'
-    : 'Save latency < 2 seconds'
+    ? 'Qualidade e performance dentro dos padrões'
+    : 'Quality and performance within standards'
   ));
   lines.push('- [ ] ' + (isPortuguese
-    ? 'Taxa de satisfação do usuário > 95%'
-    : 'User satisfaction rate > 95%'
+    ? 'Satisfação dos usuários finais validada'
+    : 'End user satisfaction validated'
   ));
   lines.push('');
 

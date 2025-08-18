@@ -35,31 +35,12 @@ export class BusinessAnalyst extends AIPersona {
   }
 
   protected generateFallbackResponse(context: PersonaContext): string {
-    const { prompt, language, previousTurns } = context;
+    const { language } = context;
     const isPortuguese = language === 'pt' || language === 'pt-BR';
     
-    let response = isPortuguese 
-      ? `Analisando o requisito: "${prompt.substring(0, 40)}...", `
-      : `Analyzing the requirement: "${prompt.substring(0, 40)}...", `;
-    
-    if (previousTurns.length === 0) {
-      if (isPortuguese) {
-        response += `identifico a necessidade principal como persistência de dados. `;
-        response += `Requisitos chave: auto-salvamento, armazenamento local, sincronização servidor. `;
-        response += `KPIs: 99,9% retenção dados, <2s latência salvamento.`;
-      } else {
-        response += `I identify the core need as data persistence. `;
-        response += `Key requirements: auto-save, local storage, server sync. `;
-        response += `KPIs: 99.9% data retention, <2s save latency.`;
-      }
-    } else {
-      if (isPortuguese) {
-        response += `baseado na discussão, adiciono requisitos de indicadores visuais e tratamento de casos extremos.`;
-      } else {
-        response += `based on the discussion, I add requirements for visual indicators and edge case handling.`;
-      }
-    }
-    
-    return this.limitWords(response);
+    // Minimal fallback - only used when all AI attempts fail
+    return isPortuguese 
+      ? `Como analista de negócio, preciso definir requisitos funcionais claros e critérios de aceitação.`
+      : `As business analyst, I need to define clear functional requirements and acceptance criteria.`;
   }
 }
