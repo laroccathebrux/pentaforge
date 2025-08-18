@@ -193,13 +193,13 @@ export function createAIServiceFromEnv(): AIService {
   const temperature = process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7;
   const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
 
-  log.info(`🧠 AI Service Configuration:`);
-  log.info(`   Provider: ${provider}`);
-  log.info(`   Model: ${model}`);
-  log.info(`   Base URL: ${baseURL || 'default'}`);
-  log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
-  log.info(`   Temperature: ${temperature}`);
-  log.info(`   Max Tokens: ${maxTokens}`);
+  log.debug(`🧠 Default AI Service Configuration:`);
+  log.debug(`   Provider: ${provider}`);
+  log.debug(`   Model: ${model}`);
+  log.debug(`   Base URL: ${baseURL || 'default'}`);
+  log.debug(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
+  log.debug(`   Temperature: ${temperature}`);
+  log.debug(`   Max Tokens: ${maxTokens}`);
 
   return new AIService({
     provider,

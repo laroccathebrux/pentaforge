@@ -3,7 +3,7 @@ import { AIService, AIMessage, createAIServiceFromEnv } from '../lib/aiService.j
 import { log } from '../lib/log.js';
 
 export abstract class AIPersona extends Persona {
-  private aiService: AIService;
+  protected aiService: AIService;
 
   constructor(
     name: string,
@@ -13,6 +13,12 @@ export abstract class AIPersona extends Persona {
   ) {
     super(name, role, objectives);
     this.aiService = aiService || createAIServiceFromEnv();
+  }
+
+  // Method to override the AI service after construction
+  setAIService(aiService: AIService): void {
+    this.aiService = aiService;
+    log.debug(`🔄 ${this.role}: AI service overridden with new model`);
   }
 
   async generateResponse(context: PersonaContext): Promise<string> {

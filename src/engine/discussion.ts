@@ -33,15 +33,28 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
   // Create AI service with custom model if specified
   let aiService: AIService | undefined;
   if (config.model) {
+    const provider = (process.env.AI_PROVIDER || 'ollama') as any;
+    const apiKey = process.env.AI_API_KEY;
+    const baseURL = process.env.AI_BASE_URL;
+    const temperature = process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7;
+    const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
+    
     aiService = new AIService({
-      provider: (process.env.AI_PROVIDER || 'ollama') as any,
-      apiKey: process.env.AI_API_KEY,
-      baseURL: process.env.AI_BASE_URL,
+      provider,
+      apiKey,
+      baseURL,
       model: config.model,
-      temperature: process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7,
-      maxTokens: process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500,
+      temperature,
+      maxTokens,
     });
-    log.info(`🎯 Using custom model: ${config.model}`);
+    
+    log.info(`🎯 Custom AI Service Configuration:`);
+    log.info(`   Provider: ${provider}`);
+    log.info(`   Model: ${config.model}`);
+    log.info(`   Base URL: ${baseURL || 'default'}`);
+    log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
+    log.info(`   Temperature: ${temperature}`);
+    log.info(`   Max Tokens: ${maxTokens}`);
   }
   
   const personas = [
@@ -55,7 +68,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
   // Override AI service for all personas if custom model specified
   if (aiService) {
     personas.forEach(persona => {
-      (persona as any).aiService = aiService;
+      persona.setAIService(aiService);
     });
   }
 
