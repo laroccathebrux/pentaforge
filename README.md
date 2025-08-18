@@ -190,19 +190,43 @@ Once registered with Claude Code, you can use PentaForge by having a natural con
 
 ### Natural Language Example
 
-Simply describe your development need in a conversation with Claude Code:
+Describe your development need and explicitly request the MCP tool:
 
 ```
-You: "My TodoApp does not persist the data. As a user, I need to persist the data using LocalStorage so that my todos don't disappear when I refresh the page."
+You: "My TodoApp does not persist the data. As a user, I need to persist the data using LocalStorage so that my todos don't disappear when I refresh the page.
 
-Claude Code: I'll help you create a comprehensive specification for adding LocalStorage persistence to your TodoApp. Let me organize a roundtable discussion with expert personas to analyze this requirement.
+Please use the PentaForge MCP server to run a roundtable discussion and generate a comprehensive specification for this requirement. You MUST provide any .md files from my project (especially CLAUDE.md and any docs/ files) as context to the MCP server using the claudeMd and docsContext parameters."
 
-[Claude Code automatically calls the run_roundtable tool]
+Claude Code: I'll help you create a comprehensive specification for adding LocalStorage persistence to your TodoApp. Let me use the PentaForge MCP server to organize a roundtable discussion with expert personas.
+
+[Claude Code calls the run_roundtable tool from PentaForge MCP server]
 
 Claude Code: The expert roundtable has completed their discussion! Here's what they recommend:
 
 [Shows the generated DISCUSSION.md and REQUEST.md with detailed specifications, technical recommendations, and implementation guidance for LocalStorage persistence]
 ```
+
+### Alternative: Direct Tool Request
+
+If Claude Code doesn't automatically call the tool, be more explicit:
+
+```
+You: "I need you to use the run_roundtable tool from the PentaForge MCP server to analyze this requirement:
+
+My TodoApp does not persist the data. As a user, I need to persist the data using LocalStorage so that my todos don't disappear when I refresh the page.
+
+Please call the run_roundtable tool with this prompt and show me the results. You MUST include any .md files from my project as context - read my CLAUDE.md file and any docs/ files, then provide them using the claudeMd and docsContext parameters."
+```
+
+### ⚠️ Important: Always Request Context
+
+For the best results, **always** explicitly request that Claude Code provide your project files as context:
+
+- **"You MUST provide any .md files as context"**
+- **"Read my CLAUDE.md and docs/ files and include them"**  
+- **"Use the claudeMd and docsContext parameters"**
+
+Without project context, the MCP will use generic recommendations. With context, you get project-specific, relevant specifications!
 
 ### Manual Tool Call (Advanced)
 
