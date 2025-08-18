@@ -13,7 +13,7 @@ export interface ProjectContext {
 }
 
 export async function readProjectContext(projectRoot: string = '.'): Promise<ProjectContext> {
-  log.debug('🔍 Reading project context...');
+  log.info(`🔍 Reading project context from: ${projectRoot}`);
   
   const context: ProjectContext = {
     docsFiles: [],
@@ -22,30 +22,36 @@ export async function readProjectContext(projectRoot: string = '.'): Promise<Pro
 
   // Read CLAUDE.md if it exists
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
+  log.info(`🔎 Checking for CLAUDE.md at: ${claudeMdPath}`);
   try {
     const claudeMdContent = await fs.readFile(claudeMdPath, 'utf-8');
     context.claudeMd = claudeMdContent;
-    log.debug('✅ CLAUDE.md found and loaded');
+    log.info('✅ CLAUDE.md found and loaded successfully (' + claudeMdContent.length + ' characters)');
   } catch (error) {
-    log.debug('ℹ️  CLAUDE.md not found, skipping');
+    log.info(`ℹ️  CLAUDE.md not found at path: ${claudeMdPath}`);
   }
 
   // Read docs/ directory recursively if it exists
   const docsPath = path.join(projectRoot, 'docs');
+  log.info(`🔎 Checking for docs/ directory at: ${docsPath}`);
   try {
     await fs.access(docsPath);
     const docsFiles = await readDocsDirectory(docsPath, docsPath);
     context.docsFiles = docsFiles;
-    log.debug(`✅ Found ${docsFiles.length} documentation files`);
+    log.info(`✅ Found ${docsFiles.length} documentation files in docs/ directory`);
+    docsFiles.forEach(file => {
+      log.info(`   📄 ${file.relativePath} (${file.content.length} characters)`);
+    });
   } catch (error) {
     // Directory doesn't exist, skip silently
-    log.debug('ℹ️  docs/ directory not found, skipping');
+    log.info(`ℹ️  docs/ directory not found at path: ${docsPath}`);
   }
 
   // Generate summary
   context.summary = generateContextSummary(context);
   
-  log.info(`📖 Project context loaded: CLAUDE.md=${!!context.claudeMd}, docs files=${context.docsFiles.length}`);
+  log.info(`📖 Project context summary: ${context.summary}`);
+  log.info(`📊 Context stats: CLAUDE.md=${!!context.claudeMd ? 'loaded' : 'not found'}, docs files=${context.docsFiles.length}`);
   return context;
 }
 
@@ -71,7 +77,7 @@ async function readDocsDirectory(dirPath: string, basePath: string): Promise<Arr
             content,
             relativePath,
           });
-          log.debug(`📄 Loaded: ${relativePath}`);
+          log.info(`📄 Loaded doc file: ${relativePath} (${content.length} chars)`);
         } catch (error) {
           log.warn(`⚠️  Failed to read ${relativePath}: ${error}`);
         }

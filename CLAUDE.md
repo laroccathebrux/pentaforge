@@ -180,6 +180,16 @@ LOG_LEVEL=DEBUG npm start
 
 ### What Debug Logs Show
 
+**Project Context Loading:**
+- **📂 Current working directory**: Shows where PentaForge is reading files from
+- **🔎 Checking for CLAUDE.md**: Shows exact path being checked
+- **✅ CLAUDE.md found**: Confirms file was loaded with character count
+- **🔎 Checking for docs/ directory**: Shows docs directory path being scanned
+- **📄 Loaded doc file**: Lists each documentation file found with size
+- **📖 Project context summary**: Summary of all context loaded
+- **📊 Context stats**: Final count of CLAUDE.md + docs files
+
+**AI Service Operations:**
 - **🧠 AI Service Configuration**: Shows provider, model, API key status at startup
 - **🤖 Persona attempting AI response**: When each persona tries to use AI
 - **✅ AI response generated successfully**: When AI responds with word count

@@ -86,8 +86,9 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
   log.info(`Timestamp: ${timestamp}, Language: ${language}, Tone: ${tone}`);
 
   // Read project context from client's working directory
+  log.info(`📂 Current working directory: ${process.cwd()}`);
   const projectContext = await readProjectContext(process.cwd());
-  log.debug(`📖 Project context summary: ${projectContext.summary}`);
+  log.info(`🎯 Project context loaded with summary: ${projectContext.summary}`);
 
   const discussion = await orchestrateDiscussion({
     prompt,
