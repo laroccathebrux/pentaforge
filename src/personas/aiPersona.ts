@@ -1,5 +1,6 @@
 import { Persona, PersonaContext } from './base.js';
 import { AIService, AIMessage, createAIServiceFromEnv } from '../lib/aiService.js';
+import { formatContextForPersonas } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
 
 export abstract class AIPersona extends Persona {
@@ -39,7 +40,7 @@ export abstract class AIPersona extends Persona {
   }
 
   private buildAIMessages(context: PersonaContext): AIMessage[] {
-    const { prompt, language, previousTurns } = context;
+    const { prompt, language, previousTurns, projectContext } = context;
     const isPortuguese = language === 'pt' || language === 'pt-BR';
 
     const messages: AIMessage[] = [];
@@ -49,6 +50,15 @@ export abstract class AIPersona extends Persona {
       role: 'system',
       content: this.buildSystemPrompt(isPortuguese),
     });
+
+    // Add project context if available
+    if (projectContext) {
+      const contextFormatted = formatContextForPersonas(projectContext, language);
+      messages.push({
+        role: 'user',
+        content: contextFormatted,
+      });
+    }
 
     // Add context about the problem
     messages.push({

@@ -5,6 +5,7 @@ import { writeRequestMarkdown } from '../writers/requestWriter.js';
 import { ensureDirectory } from '../lib/fs.js';
 import { getTimestamp } from '../lib/clock.js';
 import { detectLanguage } from '../lib/i18n.js';
+import { readProjectContext } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
 import * as path from 'path';
 
@@ -84,12 +85,17 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
   const timestamp = getTimestamp();
   log.info(`Timestamp: ${timestamp}, Language: ${language}, Tone: ${tone}`);
 
+  // Read project context from client's working directory
+  const projectContext = await readProjectContext(process.cwd());
+  log.debug(`📖 Project context summary: ${projectContext.summary}`);
+
   const discussion = await orchestrateDiscussion({
     prompt,
     language,
     tone,
     timestamp,
     model,
+    projectContext,
   });
 
   const discussionContent = await writeDiscussionMarkdown(discussion, {

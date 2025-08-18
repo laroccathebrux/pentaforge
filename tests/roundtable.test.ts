@@ -1,6 +1,5 @@
 import { executeRoundtable, RoundtableInput } from '../src/tools/roundtable';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 
 // Mock the fs module
 jest.mock('fs/promises');
@@ -11,6 +10,15 @@ jest.mock('../src/lib/log', () => ({
     warn: jest.fn(),
     debug: jest.fn(),
   },
+}));
+
+// Mock the contextReader module
+jest.mock('../src/lib/contextReader', () => ({
+  readProjectContext: jest.fn().mockResolvedValue({
+    claudeMd: 'Mock CLAUDE.md content',
+    docsFiles: [],
+    summary: 'Mock project context'
+  })
 }));
 
 describe('Roundtable Execution', () => {

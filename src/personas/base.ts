@@ -1,8 +1,11 @@
+import { ProjectContext } from '../lib/contextReader.js';
+
 export interface PersonaContext {
   prompt: string;
   language: string;
   tone: string;
   previousTurns: Turn[];
+  projectContext?: ProjectContext;
 }
 
 export interface Turn {

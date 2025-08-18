@@ -5,6 +5,7 @@ import { ProductOwner } from '../personas/ProductOwner.js';
 import { ScrumMaster } from '../personas/ScrumMaster.js';
 import { SolutionsArchitect } from '../personas/SolutionsArchitect.js';
 import { AIService } from '../lib/aiService.js';
+import { ProjectContext } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
 
 export interface DiscussionConfig {
@@ -13,6 +14,7 @@ export interface DiscussionConfig {
   tone: string;
   timestamp: string;
   model?: string;
+  projectContext?: ProjectContext;
 }
 
 export interface Discussion {
@@ -104,6 +106,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
         language: config.language,
         tone: config.tone,
         previousTurns: discussion.rounds,
+        projectContext: config.projectContext,
       });
 
       const turn: Turn = {
