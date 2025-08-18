@@ -1,8 +1,9 @@
 import { Discussion } from '../engine/discussion.js';
 import { WriterConfig } from './discussionWriter.js';
+import { Turn } from '../personas/base.js';
 
 export async function writeRequestMarkdown(
-  _discussion: Discussion,
+  discussion: Discussion,
   config: WriterConfig
 ): Promise<string> {
   const { language, timestamp, prompt, includeAcceptanceCriteria = true } = config;
@@ -24,59 +25,48 @@ export async function writeRequestMarkdown(
   lines.push(prompt);
   lines.push('');
 
-  // Current vs Desired
+  // Current vs Desired - Extract from Key User perspective
+  const userInsights = getPersonaInsights(discussion.rounds, 'Key User');
   lines.push(`## ${isPortuguese ? 'Comportamento Atual vs Desejado' : 'Current vs Desired Behavior'}`);
   lines.push('');
-  lines.push(`### ${isPortuguese ? 'Atual' : 'Current'}`);
-  lines.push(isPortuguese
-    ? '- Dados são perdidos ao atualizar a página'
-    : '- Data is lost on page refresh'
-  );
-  lines.push(isPortuguese
-    ? '- Nenhuma persistência entre sessões'
-    : '- No persistence between sessions'
-  );
-  lines.push(isPortuguese
-    ? '- Usuários precisam recriar trabalho perdido'
-    : '- Users must recreate lost work'
-  );
-  lines.push('');
-  
-  lines.push(`### ${isPortuguese ? 'Desejado' : 'Desired'}`);
-  lines.push(isPortuguese
-    ? '- Dados persistem automaticamente'
-    : '- Data persists automatically'
-  );
-  lines.push(isPortuguese
-    ? '- Recuperação transparente após refresh'
-    : '- Seamless recovery after refresh'
-  );
-  lines.push(isPortuguese
-    ? '- Sincronização entre dispositivos (fase 2)'
-    : '- Cross-device sync (phase 2)'
-  );
-  lines.push('');
+  if (userInsights.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Insights do Usuário' : 'User Insights'}`);
+    userInsights.forEach(insight => {
+      lines.push(`- ${insight}`);
+    });
+    lines.push('');
+  } else {
+    // Fallback to generic content
+    lines.push(`### ${isPortuguese ? 'Atual' : 'Current'}`);
+    lines.push(isPortuguese
+      ? '- Dados são perdidos ao atualizar a página'
+      : '- Data is lost on page refresh'
+    );
+    lines.push(`### ${isPortuguese ? 'Desejado' : 'Desired'}`);
+    lines.push(isPortuguese
+      ? '- Dados persistem automaticamente'
+      : '- Data persists automatically'
+    );
+    lines.push('');
+  }
 
-  // Business Goals
+  // Business Goals - Extract from Product Owner perspective
+  const businessInsights = getPersonaInsights(discussion.rounds, 'Product Owner');
   lines.push(`## ${isPortuguese ? 'Objetivos de Negócio e Métricas' : 'Business Goals & Success Metrics'}`);
   lines.push('');
-  lines.push(isPortuguese
-    ? '- **Objetivo Principal:** Eliminar perda de dados e aumentar confiança do usuário'
-    : '- **Primary Goal:** Eliminate data loss and increase user trust'
-  );
-  lines.push(isPortuguese
-    ? '- **KPI 1:** Taxa de retenção de dados > 99,9%'
-    : '- **KPI 1:** Data retention rate > 99.9%'
-  );
-  lines.push(isPortuguese
-    ? '- **KPI 2:** Latência de salvamento < 2 segundos'
-    : '- **KPI 2:** Save latency < 2 seconds'
-  );
-  lines.push(isPortuguese
-    ? '- **KPI 3:** Redução de 50% em reclamações sobre perda de trabalho'
-    : '- **KPI 3:** 50% reduction in "lost work" complaints'
-  );
-  lines.push('');
+  if (businessInsights.length > 0) {
+    businessInsights.forEach(insight => {
+      lines.push(`- ${insight}`);
+    });
+    lines.push('');
+  } else {
+    // Fallback content
+    lines.push(isPortuguese
+      ? '- **Objetivo Principal:** Eliminar perda de dados e aumentar confiança do usuário'
+      : '- **Primary Goal:** Eliminate data loss and increase user trust'
+    );
+    lines.push('');
+  }
 
   // Scope
   lines.push(`## ${isPortuguese ? 'Escopo' : 'Scope'}`);
@@ -115,30 +105,36 @@ export async function writeRequestMarkdown(
   );
   lines.push('');
 
-  // Functional Requirements
-  lines.push(`## ${isPortuguese ? 'Requisitos Funcionais' : 'Functional Requirements'}`);
+  // Technical Requirements - Extract from Solutions Architect and Business Analyst
+  const techInsights = getPersonaInsights(discussion.rounds, 'Solutions Architect');
+  const requirementInsights = getPersonaInsights(discussion.rounds, 'Business Analyst');
+  
+  lines.push(`## ${isPortuguese ? 'Requisitos Técnicos' : 'Technical Requirements'}`);
   lines.push('');
-  lines.push(isPortuguese
-    ? '1. Sistema deve salvar dados automaticamente a cada 2 segundos após mudanças'
-    : '1. System shall auto-save data every 2 seconds after changes'
-  );
-  lines.push(isPortuguese
-    ? '2. Sistema deve usar IndexedDB para armazenamento local'
-    : '2. System shall use IndexedDB for local storage'
-  );
-  lines.push(isPortuguese
-    ? '3. Sistema deve mostrar indicador visual de status (salvando/salvo/erro)'
-    : '3. System shall display visual status indicator (saving/saved/error)'
-  );
-  lines.push(isPortuguese
-    ? '4. Sistema deve recuperar dados ao recarregar página'
-    : '4. System shall recover data on page reload'
-  );
-  lines.push(isPortuguese
-    ? '5. Sistema deve implementar fallback para localStorage se IndexedDB falhar'
-    : '5. System shall implement localStorage fallback if IndexedDB fails'
-  );
-  lines.push('');
+  if (techInsights.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Arquitetura e Implementação' : 'Architecture & Implementation'}`);
+    techInsights.forEach((insight, index) => {
+      lines.push(`${index + 1}. ${insight}`);
+    });
+    lines.push('');
+  }
+  
+  if (requirementInsights.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Requisitos Funcionais' : 'Functional Requirements'}`);
+    requirementInsights.forEach((insight, index) => {
+      lines.push(`${index + 1}. ${insight}`);
+    });
+    lines.push('');
+  }
+  
+  // If no AI insights available, use fallback
+  if (techInsights.length === 0 && requirementInsights.length === 0) {
+    lines.push(isPortuguese
+      ? '1. Sistema deve salvar dados automaticamente'
+      : '1. System shall auto-save data automatically'
+    );
+    lines.push('');
+  }
 
   // NFRs
   lines.push(`## ${isPortuguese ? 'Requisitos Não-Funcionais' : 'Non-Functional Requirements'}`);
@@ -271,46 +267,25 @@ export async function writeRequestMarkdown(
   );
   lines.push('');
 
-  // Release Plan
+  // Release Plan - Extract from Scrum Master insights
+  const scrumInsights = getPersonaInsights(discussion.rounds, 'Scrum Master');
   lines.push(`## ${isPortuguese ? 'Plano de Release' : 'Release Plan'}`);
   lines.push('');
-  lines.push(`### ${isPortuguese ? 'Sprint 1 (Semana 1-2)' : 'Sprint 1 (Week 1-2)'}`);
-  lines.push(isPortuguese
-    ? '- Implementar persistência local com IndexedDB'
-    : '- Implement local persistence with IndexedDB'
-  );
-  lines.push(isPortuguese
-    ? '- Criar mecanismo de auto-salvamento'
-    : '- Create auto-save mechanism'
-  );
-  lines.push(isPortuguese
-    ? '- Adicionar indicador visual de status'
-    : '- Add visual status indicator'
-  );
-  lines.push(isPortuguese
-    ? '- Testes unitários e de integração'
-    : '- Unit and integration tests'
-  );
-  lines.push('');
-  
-  lines.push(`### ${isPortuguese ? 'Sprint 2 (Semana 3-4)' : 'Sprint 2 (Week 3-4)'}`);
-  lines.push(isPortuguese
-    ? '- Implementar API de sincronização'
-    : '- Implement sync API'
-  );
-  lines.push(isPortuguese
-    ? '- Adicionar resolução de conflitos'
-    : '- Add conflict resolution'
-  );
-  lines.push(isPortuguese
-    ? '- Implementar fallback para localStorage'
-    : '- Implement localStorage fallback'
-  );
-  lines.push(isPortuguese
-    ? '- Testes end-to-end e de carga'
-    : '- End-to-end and load testing'
-  );
-  lines.push('');
+  if (scrumInsights.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Estratégia de Entrega' : 'Delivery Strategy'}`);
+    scrumInsights.forEach(insight => {
+      lines.push(`- ${insight}`);
+    });
+    lines.push('');
+  } else {
+    // Fallback content
+    lines.push(`### ${isPortuguese ? 'Sprint 1 (Semana 1-2)' : 'Sprint 1 (Week 1-2)'}`);
+    lines.push(isPortuguese
+      ? '- Implementar persistência local'
+      : '- Implement local persistence'
+    );
+    lines.push('');
+  }
 
   // PRP-Ready Section
   lines.push(`## ${isPortuguese ? 'Artefatos PRP-Ready' : 'PRP-Ready Artifacts'}`);
@@ -345,6 +320,24 @@ export async function writeRequestMarkdown(
   ));
   lines.push('');
 
+  // Key Decisions from Discussion
+  if (discussion.decisions && discussion.decisions.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Decisões Chave da Discussão' : 'Key Decisions from Discussion'}`);
+    discussion.decisions.forEach((decision, index) => {
+      lines.push(`${index + 1}. ${decision}`);
+    });
+    lines.push('');
+  }
+
+  // Next Steps from Discussion  
+  if (discussion.nextSteps && discussion.nextSteps.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Próximos Passos' : 'Next Steps'}`);
+    discussion.nextSteps.forEach((step, index) => {
+      lines.push(`${index + 1}. ${step}`);
+    });
+    lines.push('');
+  }
+
   lines.push(`### ${isPortuguese ? 'Comandos PRP Sugeridos' : 'Suggested PRP Commands'}`);
   lines.push('');
   lines.push('```bash');
@@ -371,4 +364,24 @@ export async function writeRequestMarkdown(
   );
 
   return lines.join('\n');
+}
+
+// Helper function to extract insights from persona turns
+function getPersonaInsights(rounds: Turn[], personaRole: string): string[] {
+  const personaTurns = rounds.filter(turn => turn.role === personaRole);
+  const insights: string[] = [];
+  
+  personaTurns.forEach(turn => {
+    // Split content into sentences and extract key points
+    const sentences = turn.content.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    sentences.forEach(sentence => {
+      const trimmed = sentence.trim();
+      if (trimmed.length > 20 && trimmed.length < 200) {
+        insights.push(trimmed);
+      }
+    });
+  });
+  
+  // Return up to 5 key insights to keep the document manageable
+  return insights.slice(0, 5);
 }
