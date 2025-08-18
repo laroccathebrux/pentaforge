@@ -33,6 +33,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV TZ=UTC
 ENV LANG=en_US.UTF-8
+ENV LOG_LEVEL=INFO
 
 # Copy package files
 COPY --chown=pentaforge:pentaforge package*.json ./

@@ -61,6 +61,8 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     for (const personaIndex of roundOrder[roundIndex]) {
       const persona = personas[personaIndex];
       
+      log.debug(`🎯 Round ${round}: ${persona.role} (${persona.name}) taking turn...`);
+      
       const response = await persona.generateResponse({
         prompt: config.prompt,
         language: config.language,
@@ -76,7 +78,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
       };
 
       discussion.rounds.push(turn);
-      log.info(`${persona.role} (${persona.name}) completed turn in round ${round}`);
+      log.info(`✅ Round ${round}: ${persona.role} (${persona.name}) completed turn`);
     }
   }
 

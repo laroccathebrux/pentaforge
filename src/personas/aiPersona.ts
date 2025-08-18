@@ -17,13 +17,18 @@ export abstract class AIPersona extends Persona {
 
   async generateResponse(context: PersonaContext): Promise<string> {
     try {
+      log.debug(`🤖 ${this.role}: Attempting AI response generation...`);
       const messages = this.buildAIMessages(context);
       const response = await this.aiService.generateResponse(messages);
+      log.debug(`✅ ${this.role}: AI response generated successfully (${response.content.split(' ').length} words)`);
       return this.limitWords(response.content, 120);
     } catch (error) {
-      log.error(`AI persona ${this.role} error: ${error}`);
+      log.warn(`🚨 AI persona ${this.role} failed, using fallback response. Error: ${error}`);
+      log.debug(`🔄 ${this.role}: Switching to hardcoded fallback response`);
       // Fallback to hardcoded response if AI fails
-      return this.generateFallbackResponse(context);
+      const fallbackResponse = this.generateFallbackResponse(context);
+      log.debug(`📝 ${this.role}: Fallback response generated (${fallbackResponse.split(' ').length} words)`);
+      return fallbackResponse;
     }
   }
 

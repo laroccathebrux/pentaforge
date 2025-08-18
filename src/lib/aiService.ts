@@ -36,18 +36,33 @@ export class AIService {
 
   async generateResponse(messages: AIMessage[]): Promise<AIResponse> {
     try {
+      log.debug(`🔄 AI Service: Calling ${this.config.provider} with model ${this.config.model}`);
+      const startTime = Date.now();
+      
+      let response: AIResponse;
       switch (this.config.provider) {
         case 'openai':
-          return await this.callOpenAI(messages);
+          response = await this.callOpenAI(messages);
+          break;
         case 'anthropic':
-          return await this.callAnthropic(messages);
+          response = await this.callAnthropic(messages);
+          break;
         case 'ollama':
-          return await this.callOllama(messages);
+          response = await this.callOllama(messages);
+          break;
         default:
           throw new Error(`Unsupported AI provider: ${this.config.provider}`);
       }
+      
+      const duration = Date.now() - startTime;
+      log.debug(`⚡ AI Service: Response received in ${duration}ms (${response.content.length} chars)`);
+      if (response.usage) {
+        log.debug(`📊 Token Usage: ${response.usage.promptTokens} prompt + ${response.usage.completionTokens} completion = ${response.usage.totalTokens} total`);
+      }
+      
+      return response;
     } catch (error) {
-      log.error(`AI service error: ${error}`);
+      log.error(`❌ AI service error with ${this.config.provider}: ${error}`);
       throw new Error(`Failed to generate AI response: ${error}`);
     }
   }
@@ -175,14 +190,24 @@ export function createAIServiceFromEnv(): AIService {
   const apiKey = process.env.AI_API_KEY;
   const baseURL = process.env.AI_BASE_URL;
   const model = process.env.AI_MODEL || getDefaultModel(provider);
+  const temperature = process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7;
+  const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
+
+  log.info(`🧠 AI Service Configuration:`);
+  log.info(`   Provider: ${provider}`);
+  log.info(`   Model: ${model}`);
+  log.info(`   Base URL: ${baseURL || 'default'}`);
+  log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
+  log.info(`   Temperature: ${temperature}`);
+  log.info(`   Max Tokens: ${maxTokens}`);
 
   return new AIService({
     provider,
     apiKey,
     baseURL,
     model,
-    temperature: process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7,
-    maxTokens: process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500,
+    temperature,
+    maxTokens,
   });
 }
 

@@ -138,10 +138,39 @@ Mock filesystem operations when testing to avoid actual file writes.
 
 ## Debugging
 
+### Debug Logging Features
+
+PentaForge includes comprehensive debug logging to help you see whether AI is being used or fallback responses:
+
 Enable debug logging:
 ```bash
 LOG_LEVEL=DEBUG npm start
 ```
+
+### What Debug Logs Show
+
+- **🧠 AI Service Configuration**: Shows provider, model, API key status at startup
+- **🤖 Persona attempting AI response**: When each persona tries to use AI
+- **✅ AI response generated successfully**: When AI responds with word count
+- **🚨 AI persona failed, using fallback**: When AI fails and fallback is used
+- **🔄 Switching to hardcoded fallback**: Explicit fallback activation
+- **📝 Fallback response generated**: Fallback response with word count
+- **⚡ AI Service response timing**: Response time and character count
+- **📊 Token Usage**: Prompt/completion/total token counts (when available)
+
+### Docker Debug Mode
+
+To enable debug logging in Docker:
+
+```bash
+# Build with debug logging enabled
+docker build -t pentaforge:debug --build-arg LOG_LEVEL=DEBUG .
+
+# Or run existing image with debug logging
+docker run -e LOG_LEVEL=DEBUG -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
+```
+
+### Testing AI vs Fallback
 
 Test dry run mode to see outputs without file writes:
 ```json
@@ -150,6 +179,9 @@ Test dry run mode to see outputs without file writes:
   "dryRun": true
 }
 ```
+
+When AI is **working**: You'll see `🤖`, `✅`, and `⚡` emojis showing successful AI responses.
+When using **fallback**: You'll see `🚨`, `🔄`, and `📝` emojis showing hardcoded responses are being used.
 
 ## PRP Integration
 
