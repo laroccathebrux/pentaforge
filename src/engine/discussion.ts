@@ -4,6 +4,7 @@ import { KeyUser } from '../personas/KeyUser.js';
 import { ProductOwner } from '../personas/ProductOwner.js';
 import { ScrumMaster } from '../personas/ScrumMaster.js';
 import { SolutionsArchitect } from '../personas/SolutionsArchitect.js';
+import { AIService } from '../lib/aiService.js';
 import { log } from '../lib/log.js';
 
 export interface DiscussionConfig {
@@ -11,6 +12,7 @@ export interface DiscussionConfig {
   language: string;
   tone: string;
   timestamp: string;
+  model?: string;
 }
 
 export interface Discussion {
@@ -28,6 +30,20 @@ export interface Discussion {
 export async function orchestrateDiscussion(config: DiscussionConfig): Promise<Discussion> {
   log.info('Starting roundtable discussion orchestration');
   
+  // Create AI service with custom model if specified
+  let aiService: AIService | undefined;
+  if (config.model) {
+    aiService = new AIService({
+      provider: (process.env.AI_PROVIDER || 'ollama') as any,
+      apiKey: process.env.AI_API_KEY,
+      baseURL: process.env.AI_BASE_URL,
+      model: config.model,
+      temperature: process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7,
+      maxTokens: process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500,
+    });
+    log.info(`🎯 Using custom model: ${config.model}`);
+  }
+  
   const personas = [
     new BusinessAnalyst(),
     new KeyUser(),
@@ -35,6 +51,13 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     new ScrumMaster(),
     new SolutionsArchitect(),
   ];
+  
+  // Override AI service for all personas if custom model specified
+  if (aiService) {
+    personas.forEach(persona => {
+      (persona as any).aiService = aiService;
+    });
+  }
 
   const discussion: Discussion = {
     config,

@@ -218,8 +218,8 @@ function getDefaultModel(provider: AIServiceConfig['provider']): string {
     case 'anthropic':
       return 'claude-3-haiku-20240307';
     case 'ollama':
-      return 'llama3.2:3b';
+      return 'mistral:latest';
     default:
-      return 'llama3.2:3b';
+      return 'mistral:latest';
   }
 }

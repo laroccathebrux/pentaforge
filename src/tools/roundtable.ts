@@ -15,6 +15,7 @@ export interface RoundtableInput {
   tone?: string;
   includeAcceptanceCriteria?: boolean;
   dryRun?: boolean;
+  model?: string;
 }
 
 export interface RoundtableOutput {
@@ -54,6 +55,10 @@ export const runRoundtableTool: Tool = {
         type: 'boolean',
         description: 'Print outputs to stdout without writing files',
       },
+      model: {
+        type: 'string',
+        description: 'AI model to use (e.g., mistral:latest, deepseek-coder:latest for Ollama)',
+      },
     },
     required: ['prompt'],
   },
@@ -69,6 +74,7 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     tone = 'professional',
     includeAcceptanceCriteria = true,
     dryRun = false,
+    model,
   } = input;
 
   if (!prompt || prompt.trim().length === 0) {
@@ -83,6 +89,7 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     language,
     tone,
     timestamp,
+    model,
   });
 
   const discussionContent = await writeDiscussionMarkdown(discussion, {

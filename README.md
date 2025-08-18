@@ -71,7 +71,7 @@ PentaForge personas are powered by AI to generate dynamic, contextual responses.
 
 - **OpenAI** (GPT models) - `gpt-4o-mini`, `gpt-4`, `gpt-3.5-turbo`
 - **Anthropic** (Claude models) - `claude-3-haiku-20240307`, `claude-3-sonnet-20240229`
-- **Ollama** (Local models) - `llama3.2:3b`, `llama3.1`, `mistral`, etc.
+- **Ollama** (Local models) - `mistral:latest`, `deepseek-coder:latest`, `llama3.2:3b`, etc.
 
 ### Environment Variables
 
@@ -82,7 +82,7 @@ Configure AI providers using these environment variables:
 AI_PROVIDER=ollama                    # 'openai', 'anthropic', or 'ollama'
 AI_API_KEY=your_api_key              # Required for OpenAI/Anthropic
 AI_BASE_URL=http://localhost:11434   # Custom endpoint (optional)
-AI_MODEL=llama3.2:3b                 # Model name
+AI_MODEL=mistral:latest              # Default model name (can be overridden per call)
 AI_TEMPERATURE=0.7                   # Response creativity (0-1)
 AI_MAX_TOKENS=500                    # Response length limit
 ```
@@ -91,7 +91,21 @@ AI_MAX_TOKENS=500                    # Response length limit
 
 - **OpenAI**: `gpt-4o-mini` (fast, cost-effective)
 - **Anthropic**: `claude-3-haiku-20240307` (efficient, reliable)
-- **Ollama**: `llama3.2:3b` (local, privacy-focused)
+- **Ollama**: `mistral:latest` (local, privacy-focused)
+
+### Per-Call Model Override
+
+You can specify a different model for individual roundtable calls, useful when you have multiple Ollama models:
+
+```json
+{
+  "prompt": "Create a REST API for user management",
+  "model": "deepseek-coder:latest",
+  "dryRun": true
+}
+```
+
+This overrides the default model for that specific discussion.
 
 ### Using with Docker
 
@@ -140,8 +154,9 @@ To use local AI models with Ollama:
 # Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Download a model (3B parameter model, ~2GB)
-ollama pull llama3.2:3b
+# Download models
+ollama pull mistral:latest        # General purpose model (~4GB)
+ollama pull deepseek-coder:latest # Code-focused model (~1GB)
 
 # Verify it's running
 ollama list
@@ -180,7 +195,8 @@ Once registered with Claude Code, you can invoke the `run_roundtable` tool:
     "outputDir": "./PRPs/inputs",
     "language": "en",
     "tone": "professional",
-    "includeAcceptanceCriteria": true
+    "includeAcceptanceCriteria": true,
+    "model": "deepseek-coder:latest"
   }
 }
 ```
@@ -193,6 +209,7 @@ Once registered with Claude Code, you can invoke the `run_roundtable` tool:
 - **tone** (optional): Discussion tone (default: "professional")
 - **includeAcceptanceCriteria** (optional): Include Gherkin scenarios (default: true)
 - **dryRun** (optional): Print to stdout without writing files (default: false)
+- **model** (optional): Override AI model for this call (e.g., `mistral:latest`, `deepseek-coder:latest`)
 
 ## Example Output
 
@@ -393,9 +410,10 @@ pentaforge/
 ### Issue: "Ollama API error: Not Found"
 **Solution**: 
 - Install Ollama: `curl -fsSL https://ollama.ai/install.sh | sh`
-- Download a model: `ollama pull llama3.2:3b`
-- Verify model exists: `ollama list`
+- Download models: `ollama pull mistral:latest` and/or `ollama pull deepseek-coder:latest`
+- Verify models exist: `ollama list`
 - Check Ollama is running: `ollama serve` (if not auto-started)
+- If using custom model, specify it in the `model` parameter or set `AI_MODEL` environment variable
 
 ### Issue: OpenAI/Anthropic API errors
 **Solution**:

@@ -71,6 +71,7 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
 - `outputDir`: Where to write files (default: `./PRPs/inputs`)
 - `language`: Output language (auto-detected)
 - `dryRun`: Print to stdout without writing files
+- `model`: AI model to use (e.g., `mistral:latest`, `deepseek-coder:latest` for Ollama)
 
 ### File System Operations
 All file operations use atomic writes through `src/lib/fs.ts` to prevent corruption. Files are timestamped with format `YYYY-MM-DDTHHMMSSZ`.
@@ -95,7 +96,7 @@ PentaForge supports multiple AI providers for persona responses:
 AI_PROVIDER=ollama          # 'openai', 'anthropic', or 'ollama'
 AI_API_KEY=your_api_key     # Required for OpenAI/Anthropic
 AI_BASE_URL=http://localhost:11434  # Custom endpoint (optional)
-AI_MODEL=llama3.2:3b        # Model name
+AI_MODEL=mistral:latest     # Default model name (can be overridden per call)
 AI_TEMPERATURE=0.7          # Response creativity (0-1)
 AI_MAX_TOKENS=500           # Response length limit
 ```
@@ -103,10 +104,23 @@ AI_MAX_TOKENS=500           # Response length limit
 ### Default Models
 - **OpenAI**: `gpt-4o-mini`
 - **Anthropic**: `claude-3-haiku-20240307` 
-- **Ollama**: `llama3.2:3b`
+- **Ollama**: `mistral:latest`
+
+### Model Selection
+You can override the default model on a per-call basis using the `model` parameter:
+
+```json
+{
+  "prompt": "Create a todo application",
+  "model": "deepseek-coder:latest",
+  "dryRun": true
+}
+```
+
+This is especially useful for Ollama where you can choose between different models you have installed locally.
 
 ### Fallback Behavior
-When AI providers are unavailable, personas automatically use hardcoded responses to ensure system reliability.
+When AI providers are unavailable or the specified model doesn't exist, personas automatically use hardcoded responses to ensure system reliability. Debug logs will clearly show when fallback responses are being used versus real AI responses.
 
 ## Testing Strategy
 
