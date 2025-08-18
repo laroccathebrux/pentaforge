@@ -50,7 +50,7 @@ Five expert personas simulate an agile team meeting:
 - **ScrumMaster**: Coordinates delivery and manages risks
 - **SolutionsArchitect**: Designs technical implementation
 
-Each persona inherits from `src/personas/base.ts` and implements `generateResponse()` with context awareness.
+Each persona extends `AIPersona` (from `src/personas/aiPersona.ts`) which provides AI-powered responses using configurable LLM providers. When AI fails, personas automatically fallback to hardcoded responses ensuring system reliability.
 
 ### Discussion Engine
 `src/engine/discussion.ts` orchestrates 3 rounds of discussion with specific turn orders. It manages state, extracts decisions, and generates next steps based on the collective discussion.
@@ -81,6 +81,33 @@ All file operations use atomic writes through `src/lib/fs.ts` to prevent corrupt
 - Volume mapping required for persistence
 - Uses stdio, no ports exposed
 
+## AI Configuration
+
+### Supported LLM Providers
+PentaForge supports multiple AI providers for persona responses:
+- **OpenAI** (GPT models) 
+- **Anthropic** (Claude models)
+- **Ollama** (Local models)
+
+### Environment Variables
+```bash
+# AI Provider Configuration
+AI_PROVIDER=ollama          # 'openai', 'anthropic', or 'ollama'
+AI_API_KEY=your_api_key     # Required for OpenAI/Anthropic
+AI_BASE_URL=http://localhost:11434  # Custom endpoint (optional)
+AI_MODEL=llama3.2:3b        # Model name
+AI_TEMPERATURE=0.7          # Response creativity (0-1)
+AI_MAX_TOKENS=500           # Response length limit
+```
+
+### Default Models
+- **OpenAI**: `gpt-4o-mini`
+- **Anthropic**: `claude-3-haiku-20240307` 
+- **Ollama**: `llama3.2:3b`
+
+### Fallback Behavior
+When AI providers are unavailable, personas automatically use hardcoded responses to ensure system reliability.
+
 ## Testing Strategy
 
 Tests are in `tests/` directory using Jest:
@@ -92,11 +119,12 @@ Mock filesystem operations when testing to avoid actual file writes.
 ## Common Modifications
 
 ### Adding a New Persona
-1. Create new class in `src/personas/` extending `base.ts`
-2. Implement `generateResponse()` with language support
-3. Add to persona array in `src/engine/discussion.ts`
-4. Update round orders if needed
-5. Add tests in `tests/personas.test.ts`
+1. Create new class in `src/personas/` extending `AIPersona`
+2. Implement `getPersonaSpecificInstructions()` with bilingual AI prompts
+3. Implement `generateFallbackResponse()` for when AI fails
+4. Add to persona array in `src/engine/discussion.ts`
+5. Update round orders if needed
+6. Add tests in `tests/personas.test.ts`
 
 ### Modifying Output Format
 1. Edit `src/writers/discussionWriter.ts` or `requestWriter.ts`

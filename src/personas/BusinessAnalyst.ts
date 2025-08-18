@@ -1,6 +1,7 @@
-import { Persona, PersonaContext } from './base.js';
+import { PersonaContext } from './base.js';
+import { AIPersona } from './aiPersona.js';
 
-export class BusinessAnalyst extends Persona {
+export class BusinessAnalyst extends AIPersona {
   constructor() {
     super(
       'Sarah Mitchell',
@@ -14,70 +15,48 @@ export class BusinessAnalyst extends Persona {
     );
   }
 
-  async generateResponse(context: PersonaContext): Promise<string> {
-    const { language } = context;
-    
-    if (language === 'pt' || language === 'pt-BR') {
-      return this.generatePortugueseResponse(context);
+  protected getPersonaSpecificInstructions(isPortuguese: boolean): string {
+    if (isPortuguese) {
+      return `Instruções específicas como Business Analyst:
+- Identifique requisitos funcionais e não-funcionais específicos
+- Defina KPIs e métricas de sucesso mensuráveis
+- Analise restrições técnicas e de negócio
+- Documente regras de negócio e casos extremos
+- Estabeleça critérios de aceitação claros
+- Considere aspectos de conformidade e regulamentação`;
     }
-    
-    return this.generateEnglishResponse(context);
+    return `Specific instructions as Business Analyst:
+- Identify specific functional and non-functional requirements
+- Define measurable KPIs and success metrics
+- Analyze technical and business constraints
+- Document business rules and edge cases
+- Establish clear acceptance criteria
+- Consider compliance and regulatory aspects`;
   }
 
-  private generateEnglishResponse(context: PersonaContext): string {
-    const { prompt, previousTurns } = context;
+  protected generateFallbackResponse(context: PersonaContext): string {
+    const { prompt, language, previousTurns } = context;
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
     
-    let response = `Analyzing the requirement: "${prompt.substring(0, 40)}...", `;
+    let response = isPortuguese 
+      ? `Analisando o requisito: "${prompt.substring(0, 40)}...", `
+      : `Analyzing the requirement: "${prompt.substring(0, 40)}...", `;
     
     if (previousTurns.length === 0) {
-      response += `I identify the core need as data persistence with session continuity. `;
-      response += `Key functional requirements: 1) Auto-save mechanism with <3s latency, `;
-      response += `2) Local storage with IndexedDB for offline capability, `;
-      response += `3) Server sync when online with conflict resolution, `;
-      response += `4) Data versioning for recovery. `;
-      response += `Constraints: Browser storage limits (10MB typical), network reliability, concurrent access. `;
-      response += `Success KPIs: 99.9% data retention rate, <2s save latency, zero reported data loss incidents.`;
-    } else {
-      const userInput = this.findPreviousTurn(previousTurns, 'Key User');
-      if (userInput) {
-        response += `building on user feedback, I'll add requirements for: `;
-        response += `5) Visual save indicators with states (saving/saved/error), `;
-        response += `6) Automatic retry with exponential backoff, `;
-        response += `7) Data export functionality for user control. `;
+      if (isPortuguese) {
+        response += `identifico a necessidade principal como persistência de dados. `;
+        response += `Requisitos chave: auto-salvamento, armazenamento local, sincronização servidor. `;
+        response += `KPIs: 99,9% retenção dados, <2s latência salvamento.`;
       } else {
-        response += `the system must handle: `;
-        response += `Edge cases: quota exceeded, corrupted data, browser incompatibility. `;
-        response += `Business rules: LIFO for conflict resolution, 30-day data retention, GDPR compliance for EU users.`;
+        response += `I identify the core need as data persistence. `;
+        response += `Key requirements: auto-save, local storage, server sync. `;
+        response += `KPIs: 99.9% data retention, <2s save latency.`;
       }
-    }
-    
-    return this.limitWords(response);
-  }
-
-  private generatePortugueseResponse(context: PersonaContext): string {
-    const { prompt, previousTurns } = context;
-    
-    let response = `Analisando o requisito: "${prompt.substring(0, 40)}...", `;
-    
-    if (previousTurns.length === 0) {
-      response += `identifico a necessidade principal como persistência de dados com continuidade de sessão. `;
-      response += `Requisitos funcionais chave: 1) Mecanismo de auto-salvamento com latência <3s, `;
-      response += `2) Armazenamento local com IndexedDB para capacidade offline, `;
-      response += `3) Sincronização com servidor quando online com resolução de conflitos, `;
-      response += `4) Versionamento de dados para recuperação. `;
-      response += `Restrições: Limites de armazenamento do navegador (10MB típico), confiabilidade de rede, acesso concorrente. `;
-      response += `KPIs de sucesso: 99,9% taxa de retenção de dados, <2s latência de salvamento, zero incidentes de perda de dados.`;
     } else {
-      const userInput = this.findPreviousTurn(previousTurns, 'Key User');
-      if (userInput) {
-        response += `baseando no feedback do usuário, adiciono requisitos para: `;
-        response += `5) Indicadores visuais de salvamento com estados (salvando/salvo/erro), `;
-        response += `6) Retry automático com backoff exponencial, `;
-        response += `7) Funcionalidade de exportação para controle do usuário. `;
+      if (isPortuguese) {
+        response += `baseado na discussão, adiciono requisitos de indicadores visuais e tratamento de casos extremos.`;
       } else {
-        response += `o sistema deve tratar: `;
-        response += `Casos extremos: cota excedida, dados corrompidos, incompatibilidade de navegador. `;
-        response += `Regras de negócio: LIFO para resolução de conflitos, retenção de 30 dias, conformidade LGPD.`;
+        response += `based on the discussion, I add requirements for visual indicators and edge case handling.`;
       }
     }
     
