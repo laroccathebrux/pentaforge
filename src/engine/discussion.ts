@@ -77,6 +77,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     maxTokens,
   });
   
+  /*
   log.info(`🎯 AI Service Configuration for Discussion:`);
   log.info(`   Provider: ${provider}`);
   log.info(`   Model: ${model}`);
@@ -84,7 +85,8 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
   log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
   log.info(`   Temperature: ${temperature}`);
   log.info(`   Max Tokens: ${maxTokens}`);
-  
+  */
+ 
   const personas = [
     new BusinessAnalyst(),
     new KeyUser(),

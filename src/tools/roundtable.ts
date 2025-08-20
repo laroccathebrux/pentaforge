@@ -29,6 +29,7 @@ export interface RoundtableOutput {
   requestPath?: string;
   summary: string;
   timestamp: string;
+  outputDir?: string;
 }
 
 export const runRoundtableTool: Tool = {
@@ -162,16 +163,26 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     console.log(requestContent);
   } else {
     const resolvedDir = path.resolve(outputDir);
+    log.info(`📁 Output directory: ${resolvedDir}`);
+    log.info(`📝 Creating directory if it doesn't exist...`);
     await ensureDirectory(resolvedDir);
 
     discussionPath = path.join(resolvedDir, `DISCUSSION_${timestamp}.md`);
     requestPath = path.join(resolvedDir, `REQUEST_${timestamp}.md`);
 
+    log.info(`📄 Writing DISCUSSION file: ${discussionPath}`);
+    log.info(`📄 Writing REQUEST file: ${requestPath}`);
+
     const { writeFileAtomic } = await import('../lib/fs.js');
     await writeFileAtomic(discussionPath, discussionContent);
     await writeFileAtomic(requestPath, requestContent);
 
-    log.info(`Files written: ${discussionPath}, ${requestPath}`);
+    log.info(`✅ Files successfully written:`);
+    log.info(`   - ${discussionPath}`);
+    log.info(`   - ${requestPath}`);
+    console.log(`\n✅ Files saved to: ${resolvedDir}`);
+    console.log(`   - DISCUSSION_${timestamp}.md`);
+    console.log(`   - REQUEST_${timestamp}.md`);
   }
 
   const summary = `Roundtable completed. Generated ${language === 'pt' ? 'especificação PRP-ready' : 'PRP-ready specification'} for: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
@@ -181,6 +192,7 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     requestPath,
     summary,
     timestamp,
+    outputDir: dryRun ? undefined : path.resolve(outputDir),
   };
 }
 

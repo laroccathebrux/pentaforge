@@ -231,6 +231,7 @@ export function createAIServiceFromEnv(): AIService {
   const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
 
   // Always log the configuration at INFO level for visibility
+  /*
   log.info(`🧠 AI Service Configuration:`);
   log.info(`   Provider: ${provider}`);
   log.info(`   Model: ${model}`);
@@ -238,7 +239,8 @@ export function createAIServiceFromEnv(): AIService {
   log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
   log.info(`   Temperature: ${temperature}`);
   log.info(`   Max Tokens: ${maxTokens}`);
-
+  */
+ 
   return new AIService({
     provider,
     apiKey,
