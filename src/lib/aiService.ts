@@ -210,18 +210,34 @@ export class AIService {
 export function createAIServiceFromEnv(): AIService {
   const provider = (process.env.AI_PROVIDER || 'ollama') as AIServiceConfig['provider'];
   const apiKey = process.env.AI_API_KEY;
-  const baseURL = process.env.AI_BASE_URL;
+  let baseURL = process.env.AI_BASE_URL;
+  
+  // Only use base URL for Ollama if not explicitly set
+  if (!baseURL && provider === 'ollama') {
+    // Detect if we're in Docker
+    const isDocker = process.env.DOCKER_CONTAINER || 
+                     process.env.container || 
+                     require('fs').existsSync('/.dockerenv');
+    
+    if (isDocker) {
+      baseURL = 'http://host.docker.internal:11434';
+    } else {
+      baseURL = 'http://localhost:11434';
+    }
+  }
+  
   const model = process.env.AI_MODEL || getDefaultModel(provider);
   const temperature = process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7;
   const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
 
-  log.debug(`🧠 Default AI Service Configuration:`);
-  log.debug(`   Provider: ${provider}`);
-  log.debug(`   Model: ${model}`);
-  log.debug(`   Base URL: ${baseURL || 'default'}`);
-  log.debug(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
-  log.debug(`   Temperature: ${temperature}`);
-  log.debug(`   Max Tokens: ${maxTokens}`);
+  // Always log the configuration at INFO level for visibility
+  log.info(`🧠 AI Service Configuration:`);
+  log.info(`   Provider: ${provider}`);
+  log.info(`   Model: ${model}`);
+  log.info(`   Base URL: ${baseURL || 'default for provider'}`);
+  log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
+  log.info(`   Temperature: ${temperature}`);
+  log.info(`   Max Tokens: ${maxTokens}`);
 
   return new AIService({
     provider,

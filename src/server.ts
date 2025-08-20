@@ -5,8 +5,36 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { runRoundtableTool } from './tools/roundtable.js';
 import { log } from './lib/log.js';
+import { createAIServiceFromEnv } from './lib/aiService.js';
 
 async function main(): Promise<void> {
+  // Display AI configuration at startup
+  const provider = process.env.AI_PROVIDER || 'ollama';
+  let baseURL = process.env.AI_BASE_URL;
+  
+  // Only show base URL for Ollama if not explicitly set
+  if (!baseURL && provider === 'ollama') {
+    const isDocker = process.env.DOCKER_CONTAINER || 
+                     process.env.container || 
+                     require('fs').existsSync('/.dockerenv');
+    baseURL = isDocker ? 'http://host.docker.internal:11434' : 'http://localhost:11434';
+  }
+  
+  console.log('🚀 PentaForge MCP Server Starting...');
+  console.log('====================================');
+  console.log(`🤖 AI Provider: ${provider}`);
+  console.log(`📦 AI Model: ${process.env.AI_MODEL || 'default for provider'}`);
+  console.log(`🔑 API Key: ${process.env.AI_API_KEY ? 'Configured' : 'Not set'}`);
+  console.log(`🌐 Base URL: ${baseURL || 'default for provider'}`);
+  console.log('====================================');
+  
+  // Initialize AI service to validate configuration
+  try {
+    createAIServiceFromEnv();
+    console.log('✅ AI Service initialized successfully');
+  } catch (error) {
+    console.log(`⚠️  AI Service initialization warning: ${error}`);
+  }
   const server = new Server(
     {
       name: 'pentaforge',
@@ -61,6 +89,7 @@ async function main(): Promise<void> {
   await server.connect(transport);
   
   log.info('PentaForge MCP server started');
+  console.log('✅ Server ready to accept connections');
 }
 
 main().catch((error) => {

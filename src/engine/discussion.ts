@@ -34,32 +34,56 @@ export interface Discussion {
 export async function orchestrateDiscussion(config: DiscussionConfig): Promise<Discussion> {
   log.info('Starting roundtable discussion orchestration');
   
-  // Create AI service with custom model if specified
-  let aiService: AIService | undefined;
-  if (config.model) {
-    const provider = (process.env.AI_PROVIDER || 'ollama') as any;
-    const apiKey = process.env.AI_API_KEY;
-    const baseURL = process.env.AI_BASE_URL;
-    const temperature = process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7;
-    const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
+  // Create AI service - either with custom model or from environment
+  let aiService: AIService;
+  const provider = (process.env.AI_PROVIDER || 'ollama') as any;
+  const apiKey = process.env.AI_API_KEY;
+  let baseURL = process.env.AI_BASE_URL;
+  
+  // Only use base URL for Ollama if not explicitly set
+  if (!baseURL && provider === 'ollama') {
+    // Detect if we're in Docker
+    const isDocker = process.env.DOCKER_CONTAINER || 
+                     process.env.container || 
+                     require('fs').existsSync('/.dockerenv');
     
-    aiService = new AIService({
-      provider,
-      apiKey,
-      baseURL,
-      model: config.model,
-      temperature,
-      maxTokens,
-    });
-    
-    log.info(`🎯 Custom AI Service Configuration:`);
-    log.info(`   Provider: ${provider}`);
-    log.info(`   Model: ${config.model}`);
-    log.info(`   Base URL: ${baseURL || 'default'}`);
-    log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
-    log.info(`   Temperature: ${temperature}`);
-    log.info(`   Max Tokens: ${maxTokens}`);
+    if (isDocker) {
+      baseURL = 'http://host.docker.internal:11434';
+    } else {
+      baseURL = 'http://localhost:11434';
+    }
   }
+  
+  const temperature = process.env.AI_TEMPERATURE ? parseFloat(process.env.AI_TEMPERATURE) : 0.7;
+  const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
+  
+  // Use custom model if specified, otherwise use environment model
+  const getDefaultModel = (p: string) => {
+    switch (p) {
+      case 'openai': return 'gpt-4o-mini';
+      case 'anthropic': return 'claude-3-haiku-20240307';
+      case 'ollama': return 'mistral:latest';
+      default: return 'mistral:latest';
+    }
+  };
+  const model = config.model || process.env.AI_MODEL || getDefaultModel(provider);
+  
+  aiService = new AIService({
+    provider,
+    apiKey,
+    baseURL,
+    model,
+    temperature,
+    maxTokens,
+  });
+  
+  log.info(`🎯 AI Service Configuration for Discussion:`);
+  log.info(`   Provider: ${provider}`);
+  log.info(`   Model: ${model}`);
+  log.info(`   Base URL: ${baseURL || 'default for provider'}`);
+  log.info(`   API Key: ${apiKey ? '***configured***' : 'not set'}`);
+  log.info(`   Temperature: ${temperature}`);
+  log.info(`   Max Tokens: ${maxTokens}`);
   
   const personas = [
     new BusinessAnalyst(),
@@ -69,12 +93,10 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     new SolutionsArchitect(),
   ];
   
-  // Override AI service for all personas if custom model specified
-  if (aiService) {
-    personas.forEach(persona => {
-      persona.setAIService(aiService);
-    });
-  }
+  // Set AI service for all personas
+  personas.forEach(persona => {
+    persona.setAIService(aiService);
+  });
 
   const discussion: Discussion = {
     config,
