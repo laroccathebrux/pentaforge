@@ -25,7 +25,7 @@ export interface RoundtableInput {
   }>;
   
   // NEW: Dynamic rounds configuration
-  dynamicRounds?: boolean;
+  dynamicRounds?: boolean;         // Default: true - enables adaptive consensus-driven discussions
   consensusConfig?: {
     minRounds?: number;        // Default: 2
     maxRounds?: number;        // Default: 10  
@@ -102,7 +102,7 @@ export const runRoundtableTool: Tool = {
       },
       dynamicRounds: {
         type: 'boolean',
-        description: 'Enable dynamic rounds with AI-driven consensus evaluation (default: false for backward compatibility)',
+        description: 'Enable dynamic rounds with AI-driven consensus evaluation (default: true for adaptive discussions)',
       },
       consensusConfig: {
         type: 'object',
@@ -203,7 +203,7 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     model,
     claudeMd,
     docsContext,
-    dynamicRounds = false,
+    dynamicRounds = true, // Default to dynamic rounds for better consensus detection
     consensusConfig,
   } = input;
 
