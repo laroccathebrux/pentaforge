@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Core Purpose
 
-PentaForge is an MCP (Model Context Protocol) server that orchestrates structured roundtable discussions among 5 expert personas to generate PRP-ready specifications. It transforms simple programming demands into comprehensive, actionable specifications compatible with PRPs-agentic-eng.
+PentaForge is an MCP (Model Context Protocol) server that orchestrates structured roundtable discussions among 8 expert personas to generate PRP-ready specifications. It transforms simple programming demands into comprehensive, actionable specifications compatible with PRPs-agentic-eng.
 
 ## Build and Development Commands
 
@@ -54,12 +54,15 @@ docker run -e SUPPRESS_MCP_LOGS=true -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inp
 The server uses stdio transport for communication with MCP clients like Claude Code. It exposes a single tool `run_roundtable` that accepts a prompt and orchestrates the discussion.
 
 ### Persona System
-Six expert personas simulate an agile team meeting:
-- **KeyUser**: Provides user perspective and acceptance criteria
+Eight expert personas simulate a comprehensive product team meeting:
 - **BusinessAnalyst**: Defines requirements and constraints
+- **KeyUser**: Provides user perspective and acceptance criteria
 - **ProductOwner**: Sets priorities and success metrics
 - **ScrumMaster**: Coordinates delivery and manages risks
 - **SolutionsArchitect**: Designs technical implementation
+- **UXUIDesigner**: Focuses on user experience and interface design
+- **SupportRepresentative**: Brings customer success and operational insights
+- **BusinessStakeholder**: Evaluates market positioning and ROI
 - **AIModerator**: Evaluates consensus and guides discussion resolution (dynamic rounds only)
 
 Each persona extends `AIPersona` (from `src/personas/aiPersona.ts`) which provides AI-powered responses using configurable LLM providers. When AI fails, personas automatically fallback to hardcoded responses ensuring system reliability.
@@ -215,9 +218,10 @@ Mock filesystem operations when testing to avoid actual file writes.
 1. Create new class in `src/personas/` extending `AIPersona`
 2. Implement `getPersonaSpecificInstructions()` with bilingual AI prompts
 3. Implement `generateFallbackResponse()` for when AI fails
-4. Add to persona array in `src/engine/discussion.ts`
-5. Update round orders if needed
-6. Add tests in `tests/personas.test.ts`
+4. Add to persona array in `src/engine/discussion.ts` (currently 8 personas)
+5. Update round orders in `executeFixedRounds()` for all personas
+6. Update dynamic round strategy indices in `src/engine/dynamicRoundStrategy.ts`
+7. Add tests in `tests/personas.test.ts`
 
 ### Modifying Output Format
 1. Edit `src/writers/discussionWriter.ts` or `requestWriter.ts`

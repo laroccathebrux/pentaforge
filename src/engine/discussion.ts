@@ -5,6 +5,9 @@ import { KeyUser } from '../personas/KeyUser.js';
 import { ProductOwner } from '../personas/ProductOwner.js';
 import { ScrumMaster } from '../personas/ScrumMaster.js';
 import { SolutionsArchitect } from '../personas/SolutionsArchitect.js';
+import { UXUIDesigner } from '../personas/UXUIDesigner.js';
+import { SupportRepresentative } from '../personas/SupportRepresentative.js';
+import { BusinessStakeholder } from '../personas/BusinessStakeholder.js';
 import { AIModerator } from '../personas/AIModerator.js';
 import { AIService } from '../lib/aiService.js';
 import { ProjectContext } from '../lib/contextReader.js';
@@ -103,11 +106,14 @@ export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): P
   */
  
   const personas: AIPersona[] = [
-    new BusinessAnalyst(),
-    new KeyUser(),
-    new ProductOwner(),
-    new ScrumMaster(),
-    new SolutionsArchitect(),
+    new BusinessAnalyst(),     // Index 0
+    new KeyUser(),            // Index 1
+    new ProductOwner(),       // Index 2
+    new ScrumMaster(),        // Index 3
+    new SolutionsArchitect(), // Index 4
+    new UXUIDesigner(),       // Index 5
+    new SupportRepresentative(), // Index 6
+    new BusinessStakeholder(), // Index 7
   ];
   
   // Add AI Moderator if dynamic rounds are enabled
@@ -323,9 +329,9 @@ async function executeFinalConsensusRound(
   // Order: ProductOwner (decision maker), AIModerator (if enabled), then others
   let finalOrder: number[];
   if (config.moderatorEnabled) {
-    finalOrder = [2, 5, 0, 4, 3, 1]; // PO, Moderator, BA, Architect, SM, User
+    finalOrder = [2, 8, 0, 4, 5, 7, 3, 6, 1]; // PO, Moderator, BA, Architect, UX, Business, SM, Support, User
   } else {
-    finalOrder = [2, 0, 4, 3, 1]; // PO, BA, Architect, SM, User
+    finalOrder = [2, 0, 4, 5, 7, 3, 6, 1]; // PO, BA, Architect, UX, Business, SM, Support, User
   }
   
   log.info(`📋 Final consensus round order: [${finalOrder.map(i => personas[i]?.role || 'Unknown').join(', ')}]`);
@@ -404,9 +410,9 @@ async function executeFixedRounds(
   log.info('🔄 Executing fixed 3-round discussion (backward compatibility mode)');
   
   const roundOrder = [
-    [0, 1, 2, 3, 4], // Round 1: BA, User, PO, SM, Architect
-    [1, 0, 2, 4, 3], // Round 2: User, BA, PO, Architect, SM  
-    [2, 4, 1, 3, 0], // Round 3: PO, Architect, User, SM, BA
+    [0, 1, 2, 3, 4, 5, 6, 7], // Round 1: BA, User, PO, SM, Architect, UX, Support, Business
+    [1, 0, 2, 4, 3, 5, 7, 6], // Round 2: User, BA, PO, Architect, SM, UX, Business, Support
+    [2, 4, 1, 5, 3, 7, 0, 6], // Round 3: PO, Architect, User, UX, SM, Business, BA, Support
   ];
 
   for (let roundIndex = 0; roundIndex < roundOrder.length; roundIndex++) {
