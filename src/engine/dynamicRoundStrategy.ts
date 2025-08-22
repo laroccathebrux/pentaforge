@@ -15,7 +15,8 @@ import {
 
 /**
  * Persona indices for dynamic ordering
- * 0: BusinessAnalyst, 1: KeyUser, 2: ProductOwner, 3: ScrumMaster, 4: SolutionsArchitect, 5: AIModerator
+ * 0: BusinessAnalyst, 1: KeyUser, 2: ProductOwner, 3: ScrumMaster, 4: SolutionsArchitect,
+ * 5: UXUIDesigner, 6: SupportRepresentative, 7: BusinessStakeholder, 8: AIModerator
  */
 const PERSONA_INDICES = {
   BUSINESS_ANALYST: 0,
@@ -23,17 +24,20 @@ const PERSONA_INDICES = {
   PRODUCT_OWNER: 2,
   SCRUM_MASTER: 3,
   SOLUTIONS_ARCHITECT: 4,
-  AI_MODERATOR: 5,
+  UX_UI_DESIGNER: 5,
+  SUPPORT_REPRESENTATIVE: 6,
+  BUSINESS_STAKEHOLDER: 7,
+  AI_MODERATOR: 8,
 } as const;
 
 /**
  * Default round orders for different discussion phases
  */
 const PHASE_ORDERS = {
-  exploration: [0, 1, 2, 3, 4], // BA, User, PO, SM, Architect
-  alignment: [2, 4, 0, 1, 3],   // PO, Architect, BA, User, SM
-  resolution: [3, 0, 2, 4, 1],  // SM, BA, PO, Architect, User
-  finalization: [2, 0, 4, 3, 1], // PO, BA, Architect, SM, User
+  exploration: [0, 1, 2, 3, 4, 5, 6, 7], // BA, User, PO, SM, Architect, UX, Support, Business
+  alignment: [2, 4, 0, 1, 3, 5, 7, 6],   // PO, Architect, BA, User, SM, UX, Business, Support
+  resolution: [3, 0, 2, 4, 1, 7, 5, 6],  // SM, BA, PO, Architect, User, Business, UX, Support
+  finalization: [2, 0, 4, 5, 7, 3, 6, 1], // PO, BA, Architect, UX, Business, SM, Support, User
 } as const;
 
 export class DynamicRoundStrategy {
@@ -135,8 +139,8 @@ export class DynamicRoundStrategy {
     averageResponseLength: number,
     baselineTokens: number
   ): { currentEstimate: number; increasePercentage: number } {
-    // Rough estimation: each round adds ~5 personas * response length
-    const dynamicTokens = currentRound * 5 * averageResponseLength * 1.3; // 1.3 factor for overhead
+    // Rough estimation: each round adds ~8 personas * response length
+    const dynamicTokens = currentRound * 8 * averageResponseLength * 1.3; // 1.3 factor for overhead
     const currentEstimate = baselineTokens + dynamicTokens;
     const increasePercentage = ((currentEstimate - baselineTokens) / baselineTokens) * 100;
 
@@ -216,10 +220,10 @@ export class DynamicRoundStrategy {
     issues.forEach(issue => {
       const issueLower = issue.toLowerCase();
       
-      if (issueLower.includes('requirement') || issueLower.includes('business')) {
+      if (issueLower.includes('requirement') || issueLower.includes('analysis')) {
         priorityMap.set(PERSONA_INDICES.BUSINESS_ANALYST, (priorityMap.get(PERSONA_INDICES.BUSINESS_ANALYST) || 0) + 1);
       }
-      if (issueLower.includes('user') || issueLower.includes('interface') || issueLower.includes('ux')) {
+      if (issueLower.includes('user') || issueLower.includes('experience')) {
         priorityMap.set(PERSONA_INDICES.KEY_USER, (priorityMap.get(PERSONA_INDICES.KEY_USER) || 0) + 1);
       }
       if (issueLower.includes('priority') || issueLower.includes('scope') || issueLower.includes('decision')) {
@@ -230,6 +234,15 @@ export class DynamicRoundStrategy {
       }
       if (issueLower.includes('technical') || issueLower.includes('architecture') || issueLower.includes('implementation')) {
         priorityMap.set(PERSONA_INDICES.SOLUTIONS_ARCHITECT, (priorityMap.get(PERSONA_INDICES.SOLUTIONS_ARCHITECT) || 0) + 1);
+      }
+      if (issueLower.includes('design') || issueLower.includes('interface') || issueLower.includes('ux') || issueLower.includes('ui')) {
+        priorityMap.set(PERSONA_INDICES.UX_UI_DESIGNER, (priorityMap.get(PERSONA_INDICES.UX_UI_DESIGNER) || 0) + 1);
+      }
+      if (issueLower.includes('support') || issueLower.includes('documentation') || issueLower.includes('maintenance')) {
+        priorityMap.set(PERSONA_INDICES.SUPPORT_REPRESENTATIVE, (priorityMap.get(PERSONA_INDICES.SUPPORT_REPRESENTATIVE) || 0) + 1);
+      }
+      if (issueLower.includes('business') || issueLower.includes('roi') || issueLower.includes('market') || issueLower.includes('revenue')) {
+        priorityMap.set(PERSONA_INDICES.BUSINESS_STAKEHOLDER, (priorityMap.get(PERSONA_INDICES.BUSINESS_STAKEHOLDER) || 0) + 1);
       }
     });
 
