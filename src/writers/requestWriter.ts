@@ -301,20 +301,20 @@ export async function writeRequestMarkdown(
         language
       );
       
-      lines.push('```gherkin');
+      //lines.push('```gherkin');
       lines.push(acceptanceContent.content);
-      lines.push('```');
+      //lines.push('```');
       lines.push('');
     } catch (error) {
       log.warn('🚨 Failed to generate AI content for Acceptance Criteria, using minimal fallback');
-      lines.push('```gherkin');
+      //lines.push('```gherkin');
       lines.push(isPortuguese ? 'Funcionalidade: Implementação da Solução' : 'Feature: Solution Implementation');
       lines.push('');
       lines.push(isPortuguese ? '  Cenário: Funcionalidade principal' : '  Scenario: Core functionality');
       lines.push(isPortuguese ? '    Dado que requisitos são implementados' : '    Given requirements are implemented');
       lines.push(isPortuguese ? '    Quando sistema é utilizado' : '    When system is used');
       lines.push(isPortuguese ? '    Então funciona conforme esperado' : '    Then works as expected');
-      lines.push('```');
+      //lines.push('```');
       lines.push('');
     }
   }
