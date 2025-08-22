@@ -43,6 +43,9 @@ docker run --network host -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentafo
 
 # Or override AI service configuration
 docker run -e AI_PROVIDER=openai -e AI_API_KEY=your_key -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
+
+# Suppress JSON-RPC protocol logs (optional - for cleaner output)
+docker run -e SUPPRESS_MCP_LOGS=true -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
 ```
 
 ## Architecture Overview
@@ -51,22 +54,33 @@ docker run -e AI_PROVIDER=openai -e AI_API_KEY=your_key -i --rm -v $(pwd)/PRPs/i
 The server uses stdio transport for communication with MCP clients like Claude Code. It exposes a single tool `run_roundtable` that accepts a prompt and orchestrates the discussion.
 
 ### Persona System
-Five expert personas simulate an agile team meeting:
+Six expert personas simulate an agile team meeting:
 - **KeyUser**: Provides user perspective and acceptance criteria
 - **BusinessAnalyst**: Defines requirements and constraints
 - **ProductOwner**: Sets priorities and success metrics
 - **ScrumMaster**: Coordinates delivery and manages risks
 - **SolutionsArchitect**: Designs technical implementation
+- **AIModerator**: Evaluates consensus and guides discussion resolution (dynamic rounds only)
 
 Each persona extends `AIPersona` (from `src/personas/aiPersona.ts`) which provides AI-powered responses using configurable LLM providers. When AI fails, personas automatically fallback to hardcoded responses ensuring system reliability.
 
 ### Discussion Engine
-`src/engine/discussion.ts` orchestrates 3 rounds of discussion with specific turn orders. It manages state, extracts decisions, and generates next steps based on the collective discussion.
+`src/engine/discussion.ts` orchestrates discussions using either fixed 3-round mode (default) or dynamic consensus-driven rounds. The system supports two modes:
+
+**Fixed Rounds (Default)**: Traditional 3-round structure with predetermined turn orders for backward compatibility.
+
+**Dynamic Rounds (New)**: AI-driven adaptive system that continues until consensus is reached:
+- **Consensus Evaluation**: `src/engine/consensusEvaluator.ts` analyzes agreement levels using AI
+- **Dynamic Strategy**: `src/engine/dynamicRoundStrategy.ts` generates adaptive persona ordering
+- **Termination Logic**: Discussions end when consensus threshold (85%) is reached or max rounds hit
+- **Token Optimization**: Progressive context summarization prevents token explosion
 
 ### Output Generation
 Two markdown writers in `src/writers/`:
-- `discussionWriter.ts`: Creates full transcript with participant details and decisions
-- `requestWriter.ts`: Generates PRP-ready specification with all required artifacts
+- `discussionWriter.ts`: Creates full transcript with participant details, decisions, and consensus metrics
+- `requestWriter.ts`: Generates PRP-ready specification with consensus summary and enhanced quality indicators
+
+Both writers automatically include consensus data when dynamic rounds are used, providing transparency into the decision-making process and agreement levels achieved.
 
 ### Internationalization
 Auto-detects Portuguese vs English from input prompt. All personas and outputs adapt language accordingly.
@@ -96,7 +110,16 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
 - `claudeMd`: Content of CLAUDE.md file from the project (optional)
 - `docsContext`: Array of documentation files from docs/ directory (optional)
 
-**Example with Context:**
+**NEW: Dynamic Rounds Parameters**
+- `dynamicRounds`: Enable AI-driven consensus evaluation (default: false)
+- `consensusConfig`: Configuration for dynamic behavior:
+  - `minRounds`: Minimum rounds before consensus evaluation (default: 2)
+  - `maxRounds`: Maximum rounds to prevent infinite discussions (default: 10)
+  - `consensusThreshold`: Required agreement percentage (default: 85)
+  - `conflictTolerance`: Maximum unresolved conflicts (default: 15)
+  - `moderatorEnabled`: Include AI moderator rounds (default: true)
+
+**Example with Context (Fixed Rounds):**
 ```json
 {
   "prompt": "Add user authentication to my app",
@@ -107,6 +130,21 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
       "content": "# API Documentation\n\nEndpoints:\n- GET /api/users..."
     }
   ],
+  "dryRun": true
+}
+```
+
+**Example with Dynamic Rounds:**
+```json
+{
+  "prompt": "Design a complex microservices authentication system",
+  "dynamicRounds": true,
+  "consensusConfig": {
+    "minRounds": 3,
+    "maxRounds": 8,
+    "consensusThreshold": 90,
+    "moderatorEnabled": true
+  },
   "dryRun": true
 }
 ```

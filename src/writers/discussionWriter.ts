@@ -1,4 +1,5 @@
-import { Discussion } from '../engine/discussion.js';
+import { Discussion, EnhancedDiscussion } from '../engine/discussion.js';
+import { ConsensusMetrics, isDynamicRoundsEnabled } from '../types/consensus.js';
 
 export interface WriterConfig {
   language: string;
@@ -8,7 +9,7 @@ export interface WriterConfig {
 }
 
 export async function writeDiscussionMarkdown(
-  discussion: Discussion,
+  discussion: Discussion | EnhancedDiscussion,
   config: WriterConfig
 ): Promise<string> {
   const { language, timestamp, prompt } = config;
@@ -75,6 +76,11 @@ export async function writeDiscussionMarkdown(
   }
   lines.push('');
 
+  // Add consensus metrics if available (for enhanced discussions)
+  if (isEnhancedDiscussion(discussion) && discussion.consensusHistory.length > 0) {
+    lines.push(...generateConsensusSection(discussion, isPortuguese));
+  }
+
   // Footer
   lines.push('---');
   lines.push('');
@@ -84,4 +90,113 @@ export async function writeDiscussionMarkdown(
   );
 
   return lines.join('\n');
+}
+
+/**
+ * Type guard to check if discussion is enhanced with consensus data
+ */
+function isEnhancedDiscussion(discussion: Discussion | EnhancedDiscussion): discussion is EnhancedDiscussion {
+  return 'consensusHistory' in discussion && 'consensusReached' in discussion;
+}
+
+/**
+ * Generates consensus metrics section for enhanced discussions
+ */
+function generateConsensusSection(discussion: EnhancedDiscussion, isPortuguese: boolean): string[] {
+  const lines: string[] = [];
+  
+  // Consensus Overview
+  lines.push(`## ${isPortuguese ? 'Métricas de Consenso' : 'Consensus Metrics'}`);
+  lines.push('');
+  
+  const finalConsensus = discussion.consensusHistory[discussion.consensusHistory.length - 1];
+  const isDynamic = isDynamicRoundsEnabled(discussion.config);
+  
+  if (isDynamic) {
+    lines.push(`**${isPortuguese ? 'Modo' : 'Mode'}:** ${isPortuguese ? 'Rodadas Dinâmicas' : 'Dynamic Rounds'}`);
+    lines.push(`**${isPortuguese ? 'Consenso Alcançado' : 'Consensus Reached'}:** ${discussion.consensusReached ? (isPortuguese ? 'Sim' : 'Yes') : (isPortuguese ? 'Não' : 'No')}`);
+    lines.push(`**${isPortuguese ? 'Total de Rodadas' : 'Total Rounds'}:** ${discussion.currentRound}`);
+    
+    if (finalConsensus) {
+      lines.push(`**${isPortuguese ? 'Pontuação Final de Acordo' : 'Final Agreement Score'}:** ${finalConsensus.agreementScore}%`);
+      lines.push(`**${isPortuguese ? 'Nível de Confiança' : 'Confidence Level'}:** ${finalConsensus.confidenceLevel}%`);
+      lines.push(`**${isPortuguese ? 'Fase da Discussão' : 'Discussion Phase'}:** ${translatePhase(finalConsensus.discussionPhase, isPortuguese)}`);
+    }
+  } else {
+    lines.push(`**${isPortuguese ? 'Modo' : 'Mode'}:** ${isPortuguese ? 'Rodadas Fixas (3 rodadas)' : 'Fixed Rounds (3 rounds)'}`);
+    lines.push(`**${isPortuguese ? 'Consenso' : 'Consensus'}:** ${isPortuguese ? 'Assumido (compatibilidade)' : 'Assumed (compatibility)'}`);
+  }
+  
+  lines.push('');
+  
+  // Consensus Evolution (only for dynamic rounds)
+  if (isDynamic && discussion.consensusHistory.length > 1) {
+    lines.push(`### ${isPortuguese ? 'Evolução do Consenso' : 'Consensus Evolution'}`);
+    lines.push('');
+    
+    lines.push(isPortuguese 
+      ? '| Rodada | Acordo (%) | Confiança (%) | Questões Não Resolvidas | Fase |'
+      : '| Round | Agreement (%) | Confidence (%) | Unresolved Issues | Phase |'
+    );
+    lines.push('|--------|------------|---------------|----------------------|-------|');
+    
+    discussion.consensusHistory.forEach((metrics: any, index: number) => {
+      const round = index + 1;
+      const issuesCount = metrics.unresolvedIssues.length;
+      const phase = translatePhase(metrics.discussionPhase, isPortuguese);
+      lines.push(`| ${round} | ${metrics.agreementScore}% | ${metrics.confidenceLevel}% | ${issuesCount} | ${phase} |`);
+    });
+    
+    lines.push('');
+  }
+  
+  // Final State Analysis
+  if (finalConsensus) {
+    lines.push(`### ${isPortuguese ? 'Análise Final' : 'Final Analysis'}`);
+    lines.push('');
+    
+    if (finalConsensus.unresolvedIssues.length > 0) {
+      lines.push(`**${isPortuguese ? 'Questões Não Resolvidas' : 'Unresolved Issues'}:**`);
+      finalConsensus.unresolvedIssues.forEach((issue: string) => {
+        lines.push(`- ${issue}`);
+      });
+      lines.push('');
+    }
+    
+    if (finalConsensus.conflictingPositions.size > 0) {
+      lines.push(`**${isPortuguese ? 'Posições Conflitantes' : 'Conflicting Positions'}:**`);
+      finalConsensus.conflictingPositions.forEach((positions: string[], role: string) => {
+        lines.push(`- **${role}:** ${positions.join(', ')}`);
+      });
+      lines.push('');
+    }
+    
+    if (finalConsensus.unresolvedIssues.length === 0 && finalConsensus.conflictingPositions.size === 0) {
+      lines.push(isPortuguese 
+        ? `✅ **Consenso Completo:** Todas as questões foram resolvidas e não há conflitos pendentes.`
+        : `✅ **Complete Consensus:** All issues resolved and no pending conflicts.`
+      );
+      lines.push('');
+    }
+  }
+  
+  return lines;
+}
+
+/**
+ * Translates discussion phase to appropriate language
+ */
+function translatePhase(phase: ConsensusMetrics['discussionPhase'], isPortuguese: boolean): string {
+  if (isPortuguese) {
+    switch (phase) {
+      case 'exploration': return 'Exploração';
+      case 'alignment': return 'Alinhamento';
+      case 'resolution': return 'Resolução';
+      case 'finalization': return 'Finalização';
+      default: return phase;
+    }
+  }
+  
+  // English - just capitalize first letter
+  return phase.charAt(0).toUpperCase() + phase.slice(1);
 }

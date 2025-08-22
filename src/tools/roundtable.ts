@@ -7,6 +7,7 @@ import { getTimestamp } from '../lib/clock.js';
 import { detectLanguage } from '../lib/i18n.js';
 import { readProjectContext } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
+import { createEnhancedConfig, DynamicRoundConfig } from '../types/consensus.js';
 import * as path from 'path';
 
 export interface RoundtableInput {
@@ -22,6 +23,19 @@ export interface RoundtableInput {
     path: string;
     content: string;
   }>;
+  
+  // NEW: Dynamic rounds configuration
+  dynamicRounds?: boolean;         // Default: true - enables adaptive consensus-driven discussions
+  consensusConfig?: {
+    minRounds?: number;        // Default: 2
+    maxRounds?: number;        // Default: 10  
+    consensusThreshold?: number; // Default: 85
+    conflictTolerance?: number;  // Default: 15
+    moderatorEnabled?: boolean;  // Default: true
+  };
+  
+  // NEW: Async execution option
+  async?: boolean;             // Default: true - run async in background to prevent blocking Claude
 }
 
 export interface RoundtableOutput {
@@ -30,11 +44,16 @@ export interface RoundtableOutput {
   summary: string;
   timestamp: string;
   outputDir?: string;
+  
+  // NEW: Async execution tracking
+  isAsync?: boolean;
+  executionId?: string;
+  status?: 'started' | 'running' | 'completed' | 'failed';
 }
 
 export const runRoundtableTool: Tool = {
   name: 'run_roundtable',
-  description: 'Orchestrate a structured roundtable discussion among 5 expert personas to produce PRP-ready specifications. Optionally provide project context via claudeMd and docsContext parameters for more relevant discussions.',
+  description: 'Orchestrate a structured roundtable discussion among 5 expert personas to produce PRP-ready specifications. Supports both fixed 3-round mode and adaptive dynamic rounds with AI-driven consensus evaluation. Optionally provide project context via claudeMd and docsContext parameters for more relevant discussions.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -81,12 +100,97 @@ export const runRoundtableTool: Tool = {
           }
         }
       },
+      dynamicRounds: {
+        type: 'boolean',
+        description: 'Enable dynamic rounds with AI-driven consensus evaluation (default: true for adaptive discussions)',
+      },
+      consensusConfig: {
+        type: 'object',
+        description: 'Configuration for dynamic rounds consensus evaluation',
+        properties: {
+          minRounds: {
+            type: 'number',
+            description: 'Minimum rounds before consensus evaluation (default: 2)',
+          },
+          maxRounds: {
+            type: 'number',
+            description: 'Maximum rounds to prevent infinite discussions (default: 10)',
+          },
+          consensusThreshold: {
+            type: 'number',
+            description: 'Required agreement percentage to reach consensus (default: 85)',
+          },
+          conflictTolerance: {
+            type: 'number',
+            description: 'Maximum unresolved conflicts tolerated (default: 15)',
+          },
+          moderatorEnabled: {
+            type: 'boolean',
+            description: 'Include AI moderator in discussion rounds (default: true)',
+          },
+        },
+      },
+      async: {
+        type: 'boolean',
+        description: 'Run discussion in background and return immediately (default: true to prevent blocking Claude)',
+      },
     },
     required: ['prompt'],
   },
 };
 
 export async function executeRoundtable(input: RoundtableInput): Promise<RoundtableOutput> {
+  const {
+    prompt,
+    outputDir = process.env.PENTAFORGE_OUTPUT_DIR || './PRPs/inputs',
+    dryRun = false,
+    async: isAsync = true, // Default to async to prevent Claude from getting stuck
+  } = input;
+
+  if (!prompt || prompt.trim().length === 0) {
+    throw new Error('Prompt is required and cannot be empty');
+  }
+
+  const timestamp = getTimestamp();
+  
+  // If async execution requested, start in background and return immediately
+  if (isAsync) {
+    const executionId = `roundtable_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    log.info(`🚀 Starting async PentaForge execution (ID: ${executionId})`);
+    
+    // Start background execution (fire and forget)
+    executeRoundtableSync({
+      ...input,
+      async: false // Ensure internal call is synchronous
+    }).then((result) => {
+      log.info(`✅ Async execution completed (ID: ${executionId})`);
+      console.log(`\n🎉 Roundtable Discussion Completed (ID: ${executionId})`);
+      console.log(`📁 Files saved to: ${result.outputDir || outputDir}`);
+      if (result.discussionPath) console.log(`   - ${path.basename(result.discussionPath)}`);
+      if (result.requestPath) console.log(`   - ${path.basename(result.requestPath)}`);
+    }).catch((error) => {
+      log.error(`❌ Async execution failed (ID: ${executionId}): ${error}`);
+      console.log(`\n💥 Roundtable Discussion Failed (ID: ${executionId}): ${error.message}`);
+    });
+    
+    // Return immediately with async status
+    return {
+      summary: `Roundtable discussion started in background (ID: ${executionId}). Processing "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"`,
+      timestamp,
+      outputDir: dryRun ? undefined : path.resolve(outputDir),
+      isAsync: true,
+      executionId,
+      status: 'started',
+    };
+  }
+
+  // Synchronous execution (original behavior)
+  return executeRoundtableSync(input);
+}
+
+// Separate function for synchronous execution
+export async function executeRoundtableSync(input: RoundtableInput): Promise<RoundtableOutput> {
   log.info('Starting PentaForge roundtable execution');
   
   const {
@@ -99,6 +203,8 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     model,
     claudeMd,
     docsContext,
+    dynamicRounds = true, // Default to dynamic rounds for better consensus detection
+    consensusConfig,
   } = input;
 
   if (!prompt || prompt.trim().length === 0) {
@@ -107,6 +213,19 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
 
   const timestamp = getTimestamp();
   log.info(`Timestamp: ${timestamp}, Language: ${language}, Tone: ${tone}`);
+  
+  // Log dynamic rounds configuration
+  if (dynamicRounds) {
+    const config = consensusConfig || {};
+    log.info(`🔄 Dynamic rounds enabled:`);
+    log.info(`   Min rounds: ${config.minRounds || 2}`);
+    log.info(`   Max rounds: ${config.maxRounds || 10}`);
+    log.info(`   Consensus threshold: ${config.consensusThreshold || 85}%`);
+    log.info(`   Conflict tolerance: ${config.conflictTolerance || 15}`);
+    log.info(`   Moderator enabled: ${config.moderatorEnabled !== false}`);
+  } else {
+    log.info(`📋 Using fixed 3-round mode (backward compatibility)`);
+  }
 
   // Create project context from provided parameters or fallback to local reading
   let projectContext;
@@ -130,14 +249,28 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
   }
   log.info(`🎯 Project context summary: ${projectContext.summary}`);
 
-  const discussion = await orchestrateDiscussion({
+  // Create enhanced discussion configuration
+  const baseConfig = {
     prompt,
     language,
     tone,
     timestamp,
     model,
     projectContext,
-  });
+  };
+  
+  const dynamicConfig: Partial<DynamicRoundConfig> | undefined = dynamicRounds ? {
+    enabled: true,
+    minRounds: consensusConfig?.minRounds ?? 2,
+    maxRounds: consensusConfig?.maxRounds ?? 10,
+    consensusThreshold: consensusConfig?.consensusThreshold ?? 85,
+    conflictTolerance: consensusConfig?.conflictTolerance ?? 15,
+    moderatorEnabled: consensusConfig?.moderatorEnabled ?? true,
+  } : undefined;
+  
+  const enhancedConfig = createEnhancedConfig(baseConfig, dynamicConfig);
+  
+  const discussion = await orchestrateDiscussion(enhancedConfig);
 
   const discussionContent = await writeDiscussionMarkdown(discussion, {
     language,

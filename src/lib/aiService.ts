@@ -1,4 +1,5 @@
 import { log } from './log.js';
+import { existsSync } from 'fs';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -193,7 +194,7 @@ export class AIService {
     // 2. Check if we're in Docker by looking for containerized environment
     const isDocker = process.env.DOCKER_CONTAINER || 
                      process.env.container || 
-                     require('fs').existsSync('/.dockerenv');
+                     existsSync('/.dockerenv');
     
     if (isDocker) {
       // In Docker, try host.docker.internal first, then localhost
@@ -217,7 +218,7 @@ export function createAIServiceFromEnv(): AIService {
     // Detect if we're in Docker
     const isDocker = process.env.DOCKER_CONTAINER || 
                      process.env.container || 
-                     require('fs').existsSync('/.dockerenv');
+                     existsSync('/.dockerenv');
     
     if (isDocker) {
       baseURL = 'http://host.docker.internal:11434';
