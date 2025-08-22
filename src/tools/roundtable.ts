@@ -54,6 +54,9 @@ export interface RoundtableOutput {
   isAsync?: boolean;
   executionId?: string;
   status?: 'started' | 'running' | 'completed' | 'failed';
+  
+  // NEW: Interactive resolution workflow
+  resolutionFilePath?: string;  // Path to UNRESOLVED_ISSUES.md when user resolution required
 }
 
 export const runRoundtableTool: Tool = {
@@ -184,6 +187,10 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
       console.log(`📁 Files saved to: ${result.outputDir || outputDir}`);
       if (result.discussionPath) console.log(`   - ${path.basename(result.discussionPath)}`);
       if (result.requestPath) console.log(`   - ${path.basename(result.requestPath)}`);
+      if ((result as any).resolutionFilePath) {
+        console.log(`⚠️  User resolution required: ${path.basename((result as any).resolutionFilePath)}`);
+        console.log(`🔄 Re-run with unresolvedIssuesFile parameter after resolution`);
+      }
     }).catch((error) => {
       log.error(`❌ Async execution failed (ID: ${executionId}): ${error}`);
       console.log(`\n💥 Roundtable Discussion Failed (ID: ${executionId}): ${error.message}`);
@@ -308,18 +315,26 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
   
   const discussion = await orchestrateDiscussion(enhancedConfig);
 
+  // Check if discussion requires user resolution
+  const requiresUserResolution = (discussion as any).requiresUserResolution;
+  const resolutionFilePath = (discussion as any).resolutionFilePath;
+
   const discussionContent = await writeDiscussionMarkdown(discussion, {
     language,
     timestamp,
     prompt,
   });
 
-  const requestContent = await writeRequestMarkdown(discussion, {
-    language,
-    timestamp,
-    prompt,
-    includeAcceptanceCriteria,
-  });
+  // Only generate REQUEST.md if no user resolution is required
+  let requestContent: string | undefined;
+  if (!requiresUserResolution) {
+    requestContent = await writeRequestMarkdown(discussion, {
+      language,
+      timestamp,
+      prompt,
+      includeAcceptanceCriteria,
+    });
+  }
 
   let discussionPath: string | undefined;
   let requestPath: string | undefined;
@@ -328,8 +343,15 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     log.info('DRY RUN MODE - Outputs:');
     console.log('\n=== DISCUSSION.md ===\n');
     console.log(discussionContent);
-    console.log('\n=== REQUEST.md ===\n');
-    console.log(requestContent);
+    
+    if (requiresUserResolution) {
+      console.log('\n⚠️  REQUEST.md NOT GENERATED - User resolution required');
+      console.log(`📝 Please resolve issues in: ${resolutionFilePath}`);
+      console.log('🔄 Re-run PentaForge with unresolvedIssuesFile parameter after resolution');
+    } else {
+      console.log('\n=== REQUEST.md ===\n');
+      console.log(requestContent);
+    }
   } else {
     const resolvedDir = path.resolve(outputDir);
     log.info(`📁 Output directory: ${resolvedDir}`);
@@ -337,31 +359,54 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     await ensureDirectory(resolvedDir);
 
     discussionPath = path.join(resolvedDir, `DISCUSSION_${timestamp}.md`);
-    requestPath = path.join(resolvedDir, `REQUEST_${timestamp}.md`);
 
     log.info(`📄 Writing DISCUSSION file: ${discussionPath}`);
-    log.info(`📄 Writing REQUEST file: ${requestPath}`);
-
     const { writeFileAtomic } = await import('../lib/fs.js');
     await writeFileAtomic(discussionPath, discussionContent);
-    await writeFileAtomic(requestPath, requestContent);
 
-    log.info(`✅ Files successfully written:`);
-    log.info(`   - ${discussionPath}`);
-    log.info(`   - ${requestPath}`);
-    console.log(`\n✅ Files saved to: ${resolvedDir}`);
-    console.log(`   - DISCUSSION_${timestamp}.md`);
-    console.log(`   - REQUEST_${timestamp}.md`);
+    const filesSaved = [`DISCUSSION_${timestamp}.md`];
+    const filesWritten = [discussionPath];
+
+    if (requiresUserResolution) {
+      log.info(`⚠️  REQUEST.md NOT generated - User resolution required`);
+      log.info(`📝 Please resolve issues in: ${resolutionFilePath}`);
+      log.info(`🔄 Re-run PentaForge with unresolvedIssuesFile parameter after resolution`);
+      
+      console.log(`\n⚠️  Partial completion - User resolution required`);
+      console.log(`📁 Files saved to: ${resolvedDir}`);
+      console.log(`   - DISCUSSION_${timestamp}.md`);
+      console.log(`📝 Please resolve issues in: ${resolutionFilePath}`);
+      console.log(`🔄 Re-run with: unresolvedIssuesFile parameter`);
+    } else {
+      requestPath = path.join(resolvedDir, `REQUEST_${timestamp}.md`);
+      log.info(`📄 Writing REQUEST file: ${requestPath}`);
+      await writeFileAtomic(requestPath, requestContent!);
+      
+      filesSaved.push(`REQUEST_${timestamp}.md`);
+      filesWritten.push(requestPath);
+
+      log.info(`✅ Files successfully written:`);
+      filesWritten.forEach(file => log.info(`   - ${file}`));
+      
+      console.log(`\n✅ Files saved to: ${resolvedDir}`);
+      filesSaved.forEach(file => console.log(`   - ${file}`));
+    }
   }
 
-  const summary = `Roundtable completed. Generated ${language === 'pt' ? 'especificação PRP-ready' : 'PRP-ready specification'} for: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
+  let summary: string;
+  if (requiresUserResolution) {
+    summary = `Roundtable discussion completed but requires user resolution. ${language === 'pt' ? 'Resolva as questões em UNRESOLVED_ISSUES.md antes de gerar a especificação final' : 'Please resolve issues in UNRESOLVED_ISSUES.md before generating final specification'}: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
+  } else {
+    summary = `Roundtable completed. Generated ${language === 'pt' ? 'especificação PRP-ready' : 'PRP-ready specification'} for: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
+  }
 
   return {
     discussionPath,
-    requestPath,
+    requestPath: requiresUserResolution ? undefined : requestPath,
     summary,
     timestamp,
     outputDir: dryRun ? undefined : path.resolve(outputDir),
+    ...(requiresUserResolution && { resolutionFilePath }),
   };
 }
 
