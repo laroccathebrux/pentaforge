@@ -261,11 +261,11 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
   
   const dynamicConfig: Partial<DynamicRoundConfig> | undefined = dynamicRounds ? {
     enabled: true,
-    minRounds: consensusConfig?.minRounds,
-    maxRounds: consensusConfig?.maxRounds,
-    consensusThreshold: consensusConfig?.consensusThreshold,
-    conflictTolerance: consensusConfig?.conflictTolerance,
-    moderatorEnabled: consensusConfig?.moderatorEnabled,
+    minRounds: consensusConfig?.minRounds ?? 2,
+    maxRounds: consensusConfig?.maxRounds ?? 10,
+    consensusThreshold: consensusConfig?.consensusThreshold ?? 85,
+    conflictTolerance: consensusConfig?.conflictTolerance ?? 15,
+    moderatorEnabled: consensusConfig?.moderatorEnabled ?? true,
   } : undefined;
   
   const enhancedConfig = createEnhancedConfig(baseConfig, dynamicConfig);
