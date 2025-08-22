@@ -212,6 +212,12 @@ All file operations use atomic writes through `src/lib/fs.ts` to prevent corrupt
 - Support both Portuguese and English based on original discussion language
 - Custom input validation ensures complete resolution before regeneration
 
+**⚠️ CRITICAL FIX (Latest):**
+- Fixed consensus routing logic that prevented resolution workflow triggering when unresolved issues were present
+- System now correctly generates UNRESOLVED_ISSUES.md when `finalConsensus.unresolvedIssues.length >= threshold`
+- Resolution workflow triggers based on final metrics only, not consensus history
+- Added comprehensive logging for workflow decision transparency
+
 ### Docker Considerations
 - Runs as non-root user (UID 1001)
 - Default output directory: `/app/PRPs/inputs`
