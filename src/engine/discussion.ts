@@ -1,14 +1,26 @@
 import { Turn } from '../personas/base.js';
+import { AIPersona } from '../personas/aiPersona.js';
 import { BusinessAnalyst } from '../personas/BusinessAnalyst.js';
 import { KeyUser } from '../personas/KeyUser.js';
 import { ProductOwner } from '../personas/ProductOwner.js';
 import { ScrumMaster } from '../personas/ScrumMaster.js';
 import { SolutionsArchitect } from '../personas/SolutionsArchitect.js';
+import { AIModerator } from '../personas/AIModerator.js';
 import { AIService } from '../lib/aiService.js';
 import { ProjectContext } from '../lib/contextReader.js';
 import { AIContentGenerator } from '../lib/aiContentGenerator.js';
 import { createAIServiceFromEnv } from '../lib/aiService.js';
 import { log } from '../lib/log.js';
+import { existsSync } from 'fs';
+import { ConsensusEvaluator } from './consensusEvaluator.js';
+import { DynamicRoundStrategy } from './dynamicRoundStrategy.js';
+import {
+  EnhancedDiscussionConfig,
+  EnhancedDiscussion,
+  ConsensusMetrics,
+  isDynamicRoundsEnabled,
+  DEFAULT_DYNAMIC_CONFIG,
+} from '../types/consensus.js';
 
 export interface DiscussionConfig {
   prompt: string;
@@ -31,7 +43,10 @@ export interface Discussion {
   nextSteps: string[];
 }
 
-export async function orchestrateDiscussion(config: DiscussionConfig): Promise<Discussion> {
+// Re-export EnhancedDiscussion from consensus types
+export type { EnhancedDiscussion } from '../types/consensus.js';
+
+export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): Promise<EnhancedDiscussion> {
   log.info('Starting roundtable discussion orchestration');
   
   // Create AI service - either with custom model or from environment
@@ -45,7 +60,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     // Detect if we're in Docker
     const isDocker = process.env.DOCKER_CONTAINER || 
                      process.env.container || 
-                     require('fs').existsSync('/.dockerenv');
+                     existsSync('/.dockerenv');
     
     if (isDocker) {
       baseURL = 'http://host.docker.internal:11434';
@@ -87,7 +102,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
   log.info(`   Max Tokens: ${maxTokens}`);
   */
  
-  const personas = [
+  const personas: AIPersona[] = [
     new BusinessAnalyst(),
     new KeyUser(),
     new ProductOwner(),
@@ -95,12 +110,18 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     new SolutionsArchitect(),
   ];
   
+  // Add AI Moderator if dynamic rounds are enabled
+  if (isDynamicRoundsEnabled(config)) {
+    personas.push(new AIModerator());
+    log.info('🤖 AI Moderator added to discussion for consensus evaluation');
+  }
+  
   // Set AI service for all personas
   personas.forEach(persona => {
     persona.setAIService(aiService);
   });
 
-  const discussion: Discussion = {
+  const discussion: EnhancedDiscussion = {
     config,
     participants: personas.map(p => ({
       name: p.name,
@@ -110,8 +131,167 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
     rounds: [],
     decisions: [],
     nextSteps: [],
+    consensusHistory: [],
+    decisionEvolution: [],
+    currentRound: 0,
+    consensusReached: false,
   };
 
+  // Initialize consensus system if dynamic rounds enabled
+  let consensusEvaluator: ConsensusEvaluator | null = null;
+  let dynamicStrategy: DynamicRoundStrategy | null = null;
+  let previousOrders: number[][] = [];
+  
+  if (isDynamicRoundsEnabled(config)) {
+    consensusEvaluator = new ConsensusEvaluator(aiService);
+    dynamicStrategy = new DynamicRoundStrategy();
+    log.info('🔄 Dynamic rounds enabled - starting adaptive discussion');
+  }
+
+  // Determine round execution strategy
+  if (isDynamicRoundsEnabled(config) && consensusEvaluator && dynamicStrategy) {
+    // Dynamic rounds with consensus evaluation
+    await executeDynamicRounds(discussion, personas, consensusEvaluator, dynamicStrategy, previousOrders);
+  } else {
+    // Fixed 3-round mode (backward compatibility)
+    await executeFixedRounds(discussion, personas);
+  }
+
+  discussion.decisions = await extractDecisions(discussion);
+  discussion.nextSteps = await extractNextSteps(discussion);
+
+  log.info('Discussion orchestration completed');
+  return discussion;
+}
+
+/**
+ * Executes dynamic rounds with consensus evaluation
+ */
+async function executeDynamicRounds(
+  discussion: EnhancedDiscussion,
+  personas: AIPersona[],
+  consensusEvaluator: ConsensusEvaluator,
+  dynamicStrategy: DynamicRoundStrategy,
+  previousOrders: number[][]
+): Promise<void> {
+  const config = discussion.config.dynamicRounds || DEFAULT_DYNAMIC_CONFIG;
+  let roundIndex = 0;
+  let consensusReached = false;
+
+  log.info(`🎯 Starting dynamic discussion (min: ${config.minRounds}, max: ${config.maxRounds}, threshold: ${config.consensusThreshold}%)`);
+
+  while (!consensusReached && roundIndex < config.maxRounds) {
+    const currentRound = roundIndex + 1;
+    discussion.currentRound = currentRound;
+    
+    log.info(`🔄 Starting dynamic round ${currentRound}`);
+
+    // Generate consensus metrics from previous rounds (skip for first round)
+    let consensusMetrics: ConsensusMetrics;
+    if (roundIndex === 0) {
+      // Initial metrics for first round
+      consensusMetrics = {
+        agreementScore: 0,
+        unresolvedIssues: ['Initial requirements exploration needed'],
+        conflictingPositions: new Map(),
+        confidenceLevel: 50,
+        discussionPhase: 'exploration',
+      };
+    } else {
+      try {
+        const roundTurns = discussion.rounds.filter(turn => turn.round === currentRound - 1);
+        const evaluationResult = await consensusEvaluator.evaluateRound(roundTurns, config, currentRound - 1);
+        consensusMetrics = evaluationResult.metrics;
+        
+        // Check if we should terminate
+        if (evaluationResult.shouldTerminate && currentRound > config.minRounds) {
+          log.info(`✅ Consensus reached! Agreement: ${consensusMetrics.agreementScore}%, terminating discussion`);
+          consensusReached = true;
+          discussion.consensusReached = true;
+          break;
+        }
+      } catch (error) {
+        log.warn(`🚨 Consensus evaluation failed for round ${currentRound - 1}, continuing: ${error}`);
+        consensusMetrics = {
+          agreementScore: 60,
+          unresolvedIssues: ['Consensus evaluation failed'],
+          conflictingPositions: new Map(),
+          confidenceLevel: 30,
+          discussionPhase: 'exploration',
+        };
+      }
+    }
+
+    // Store consensus metrics
+    discussion.consensusHistory.push(consensusMetrics);
+
+    // Generate round order based on consensus metrics
+    const roundOrder = dynamicStrategy.generateNextRound(
+      roundIndex,
+      consensusMetrics,
+      config,
+      previousOrders
+    );
+    previousOrders.push(roundOrder);
+
+    log.info(`📋 Round ${currentRound} order: [${roundOrder.map(i => personas[i]?.role || 'Unknown').join(', ')}]`);
+
+    // Execute turns for this round
+    for (const personaIndex of roundOrder) {
+      if (personaIndex >= personas.length) {
+        log.warn(`⚠️ Invalid persona index ${personaIndex}, skipping`);
+        continue;
+      }
+
+      const persona = personas[personaIndex];
+      
+      log.debug(`🎯 Round ${currentRound}: ${persona.role} (${persona.name}) taking turn...`);
+      
+      try {
+        const response = await persona.generateResponse({
+          prompt: discussion.config.prompt,
+          language: discussion.config.language,
+          tone: discussion.config.tone,
+          previousTurns: discussion.rounds,
+          projectContext: discussion.config.projectContext,
+        });
+
+        const turn: Turn = {
+          round: currentRound,
+          speaker: persona.name,
+          role: persona.role,
+          content: response,
+        };
+
+        discussion.rounds.push(turn);
+        log.info(`✅ Round ${currentRound}: ${persona.role} (${persona.name}) completed turn`);
+      } catch (error) {
+        log.error(`🚨 Failed to generate response for ${persona.role}: ${error}`);
+        // Continue with other personas even if one fails
+      }
+    }
+
+    roundIndex++;
+  }
+
+  // Final consensus evaluation
+  if (!consensusReached && roundIndex >= config.maxRounds) {
+    log.warn(`⚠️ Maximum rounds (${config.maxRounds}) reached without consensus`);
+    discussion.consensusReached = false;
+  }
+
+  log.info(`🏁 Dynamic discussion completed after ${roundIndex} rounds. Consensus: ${discussion.consensusReached}`);
+}
+
+/**
+ * Executes fixed 3-round mode for backward compatibility
+ */
+async function executeFixedRounds(
+  discussion: EnhancedDiscussion,
+  personas: AIPersona[]
+): Promise<void> {
+  log.info('🔄 Executing fixed 3-round discussion (backward compatibility mode)');
+  
   const roundOrder = [
     [0, 1, 2, 3, 4], // Round 1: BA, User, PO, SM, Architect
     [1, 0, 2, 4, 3], // Round 2: User, BA, PO, Architect, SM  
@@ -120,6 +300,7 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
 
   for (let roundIndex = 0; roundIndex < roundOrder.length; roundIndex++) {
     const round = roundIndex + 1;
+    discussion.currentRound = round;
     log.info(`Starting round ${round}`);
 
     for (const personaIndex of roundOrder[roundIndex]) {
@@ -128,11 +309,11 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
       log.debug(`🎯 Round ${round}: ${persona.role} (${persona.name}) taking turn...`);
       
       const response = await persona.generateResponse({
-        prompt: config.prompt,
-        language: config.language,
-        tone: config.tone,
+        prompt: discussion.config.prompt,
+        language: discussion.config.language,
+        tone: discussion.config.tone,
         previousTurns: discussion.rounds,
-        projectContext: config.projectContext,
+        projectContext: discussion.config.projectContext,
       });
 
       const turn: Turn = {
@@ -146,12 +327,10 @@ export async function orchestrateDiscussion(config: DiscussionConfig): Promise<D
       log.info(`✅ Round ${round}: ${persona.role} (${persona.name}) completed turn`);
     }
   }
-
-  discussion.decisions = await extractDecisions(discussion);
-  discussion.nextSteps = await extractNextSteps(discussion);
-
-  log.info('Discussion orchestration completed');
-  return discussion;
+  
+  // Fixed rounds always complete without consensus evaluation
+  discussion.consensusReached = true; // Assume consensus for backward compatibility
+  log.info('✅ Fixed rounds completed');
 }
 
 async function extractDecisions(discussion: Discussion): Promise<string[]> {

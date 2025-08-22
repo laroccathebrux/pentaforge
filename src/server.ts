@@ -6,6 +6,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { runRoundtableTool } from './tools/roundtable.js';
 import { log } from './lib/log.js';
 import { createAIServiceFromEnv } from './lib/aiService.js';
+import { existsSync } from 'fs';
 
 async function main(): Promise<void> {
   // Display AI configuration at startup
@@ -16,7 +17,7 @@ async function main(): Promise<void> {
   if (!baseURL && provider === 'ollama') {
     const isDocker = process.env.DOCKER_CONTAINER || 
                      process.env.container || 
-                     require('fs').existsSync('/.dockerenv');
+                     existsSync('/.dockerenv');
     baseURL = isDocker ? 'http://host.docker.internal:11434' : 'http://localhost:11434';
   }
   

@@ -1,12 +1,13 @@
-import { Discussion } from '../engine/discussion.js';
+import { Discussion, EnhancedDiscussion } from '../engine/discussion.js';
 import { WriterConfig } from './discussionWriter.js';
 import { Turn } from '../personas/base.js';
 import { AIContentGenerator } from '../lib/aiContentGenerator.js';
 import { createAIServiceFromEnv } from '../lib/aiService.js';
 import { log } from '../lib/log.js';
+import { isDynamicRoundsEnabled } from '../types/consensus.js';
 
 export async function writeRequestMarkdown(
-  discussion: Discussion,
+  discussion: Discussion | EnhancedDiscussion,
   config: WriterConfig
 ): Promise<string> {
   const { language, timestamp, prompt, includeAcceptanceCriteria = true } = config;
@@ -482,7 +483,7 @@ export async function writeRequestMarkdown(
   // Key Decisions from Discussion
   if (discussion.decisions && discussion.decisions.length > 0) {
     lines.push(`### ${isPortuguese ? 'Decisões Chave da Discussão' : 'Key Decisions from Discussion'}`);
-    discussion.decisions.forEach((decision, index) => {
+    discussion.decisions.forEach((decision: string, index: number) => {
       lines.push(`${index + 1}. ${decision}`);
     });
     lines.push('');
@@ -491,10 +492,15 @@ export async function writeRequestMarkdown(
   // Next Steps from Discussion  
   if (discussion.nextSteps && discussion.nextSteps.length > 0) {
     lines.push(`### ${isPortuguese ? 'Próximos Passos' : 'Next Steps'}`);
-    discussion.nextSteps.forEach((step, index) => {
+    discussion.nextSteps.forEach((step: string, index: number) => {
       lines.push(`${index + 1}. ${step}`);
     });
     lines.push('');
+  }
+
+  // Add consensus summary for enhanced discussions
+  if (isEnhancedDiscussion(discussion)) {
+    lines.push(...generateConsensusSummary(discussion, isPortuguese));
   }
 
   lines.push(`### ${isPortuguese ? 'Comandos PRP Sugeridos' : 'Suggested PRP Commands'}`);
@@ -543,4 +549,77 @@ function getPersonaInsights(rounds: Turn[], personaRole: string): string[] {
   
   // Return up to 5 key insights to keep the document manageable
   return insights.slice(0, 5);
+}
+
+/**
+ * Type guard to check if discussion is enhanced with consensus data
+ */
+function isEnhancedDiscussion(discussion: Discussion | EnhancedDiscussion): discussion is EnhancedDiscussion {
+  return 'consensusHistory' in discussion && 'consensusReached' in discussion;
+}
+
+/**
+ * Generates consensus summary for REQUEST.md
+ */
+function generateConsensusSummary(discussion: EnhancedDiscussion, isPortuguese: boolean): string[] {
+  const lines: string[] = [];
+  
+  lines.push(`### ${isPortuguese ? 'Resumo do Consenso' : 'Consensus Summary'}`);
+  lines.push('');
+  
+  const isDynamic = isDynamicRoundsEnabled(discussion.config);
+  const finalConsensus = discussion.consensusHistory[discussion.consensusHistory.length - 1];
+  
+  if (isDynamic) {
+    // Dynamic rounds summary
+    lines.push(`**${isPortuguese ? 'Método de Discussão' : 'Discussion Method'}:** ${isPortuguese ? 'Rodadas Dinâmicas com IA' : 'AI-Driven Dynamic Rounds'}`);
+    lines.push(`**${isPortuguese ? 'Rodadas Executadas' : 'Rounds Completed'}:** ${discussion.currentRound}`);
+    lines.push(`**${isPortuguese ? 'Consenso Alcançado' : 'Consensus Achieved'}:** ${discussion.consensusReached ? (isPortuguese ? '✅ Sim' : '✅ Yes') : (isPortuguese ? '❌ Não' : '❌ No')}`);
+    
+    if (finalConsensus) {
+      lines.push(`**${isPortuguese ? 'Nível de Acordo Final' : 'Final Agreement Level'}:** ${finalConsensus.agreementScore}%`);
+      
+      if (discussion.consensusReached) {
+        lines.push('');
+        lines.push(isPortuguese 
+          ? `🎯 **Qualidade da Especificação:** Alta qualidade devido ao consenso alcançado através de discussão adaptativa.`
+          : `🎯 **Specification Quality:** High quality due to consensus achieved through adaptive discussion.`
+        );
+        
+        if (finalConsensus.unresolvedIssues.length === 0) {
+          lines.push(isPortuguese 
+            ? `✅ **Completude:** Todas as questões foram resolvidas durante a discussão.`
+            : `✅ **Completeness:** All issues were resolved during the discussion.`
+          );
+        }
+      } else {
+        lines.push('');
+        lines.push(isPortuguese 
+          ? `⚠️ **Nota:** Consenso completo não foi alcançado dentro do limite máximo de rodadas. Pode ser necessário esclarecimento adicional.`
+          : `⚠️ **Note:** Complete consensus was not reached within maximum rounds. Additional clarification may be needed.`
+        );
+        
+        if (finalConsensus.unresolvedIssues.length > 0) {
+          lines.push('');
+          lines.push(`**${isPortuguese ? 'Questões Pendentes' : 'Pending Issues'}:**`);
+          finalConsensus.unresolvedIssues.slice(0, 3).forEach((issue: string) => {
+            lines.push(`- ${issue}`);
+          });
+        }
+      }
+    }
+  } else {
+    // Fixed rounds summary  
+    lines.push(`**${isPortuguese ? 'Método de Discussão' : 'Discussion Method'}:** ${isPortuguese ? 'Rodadas Fixas (3 rodadas)' : 'Fixed Rounds (3 rounds)'}`);
+    lines.push(`**${isPortuguese ? 'Consenso' : 'Consensus'}:** ${isPortuguese ? 'Assumido para compatibilidade' : 'Assumed for compatibility'}`);
+    lines.push('');
+    lines.push(isPortuguese 
+      ? `📋 **Abordagem Tradicional:** Esta especificação foi gerada usando o método de 3 rodadas fixas para manter compatibilidade com versões anteriores.`
+      : `📋 **Traditional Approach:** This specification was generated using the fixed 3-round method for backward compatibility.`
+    );
+  }
+  
+  lines.push('');
+  
+  return lines;
 }

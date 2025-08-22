@@ -1,6 +1,6 @@
 # PentaForge MCP Server
 
-A Model Context Protocol (MCP) server that orchestrates structured roundtable discussions among 5 expert personas to generate PRP-ready specifications for software development.
+A Model Context Protocol (MCP) server that orchestrates structured roundtable discussions among expert personas to generate PRP-ready specifications for software development. Features both traditional fixed-round discussions and AI-driven dynamic consensus evaluation.
 
 ## What is PentaForge?
 
@@ -11,14 +11,16 @@ PentaForge transforms a simple programming need into a comprehensive, actionable
 - A **Product Owner** prioritizes features and sets success metrics
 - A **Scrum Master** coordinates delivery and manages risks
 - A **Solutions Architect** designs the technical implementation
+- An **AI Moderator** evaluates consensus and guides resolution (dynamic rounds only)
 
 The result is two markdown documents ready for use with [PRPs-agentic-eng](https://github.com/Wirasm/PRPs-agentic-eng):
-- `DISCUSSION.md`: Full transcript of the roundtable discussion
-- `REQUEST.md`: Official demand specification with PRP-ready artifacts
+- `DISCUSSION.md`: Full transcript with consensus metrics (when applicable)
+- `REQUEST.md`: Official demand specification with quality indicators
 
 ## Features
 
-- 🎭 **5 Expert Personas**: Each with unique perspectives and objectives
+### Core Capabilities
+- 🎭 **Expert Personas**: 5 core personas + AI Moderator for consensus evaluation
 - 🧠 **AI-Powered Discussions**: Dynamic, contextual responses using OpenAI, Anthropic, or local models
 - 📋 **Project Context Integration**: Reads CLAUDE.md and docs/ files for project-specific recommendations
 - 🌍 **Internationalization**: Supports English and Portuguese (auto-detected)
@@ -27,6 +29,15 @@ The result is two markdown documents ready for use with [PRPs-agentic-eng](https
 - 🔄 **MCP Protocol**: Integrates with Claude Code and other MCP clients
 - 🛡️ **Reliable Fallback**: Automatic hardcoded responses when AI is unavailable
 - ⚙️ **Multi-Provider Support**: Configurable AI backends with environment variables
+
+### 🆕 Dynamic Consensus System
+- 🎯 **AI-Driven Termination**: Discussions continue until 85%+ team agreement is reached
+- 🔄 **Adaptive Rounds**: 2-10 rounds based on topic complexity (vs fixed 3 rounds)
+- 🤖 **Smart Moderation**: AI Moderator guides discussions and resolves conflicts
+- 📊 **Consensus Tracking**: Real-time agreement levels and conflict identification
+- 📈 **Quality Metrics**: Enhanced output with decision evolution and confidence scores
+- ⚡ **Token Optimized**: Progressive summarization keeps usage within 20% of baseline
+- 🔒 **Backward Compatible**: Fixed 3-round mode remains default (opt-in for dynamic)
 
 ## Installation
 
@@ -272,6 +283,80 @@ If you need to call the tool manually with specific parameters:
 - **model** (optional): Override AI model for this call (e.g., `mistral:latest`, `deepseek-coder:latest`)
 - **claudeMd** (optional): Content of CLAUDE.md file from the project
 - **docsContext** (optional): Array of documentation files from docs/ directory
+- **dynamicRounds** (optional): Enable AI-driven consensus evaluation (default: false)
+- **consensusConfig** (optional): Configure dynamic behavior (thresholds, rounds, etc.)
+
+## Dynamic Consensus System 🆕
+
+PentaForge now supports **AI-driven dynamic discussions** that adapt based on topic complexity and team agreement levels, going beyond the traditional fixed 3-round approach.
+
+### How It Works
+
+**Fixed Rounds (Default)**:
+- Traditional 3 rounds with predetermined persona order
+- Reliable, predictable, backward-compatible
+- Best for simple to moderate complexity topics
+
+**Dynamic Rounds (Opt-in)**:  
+- AI evaluates consensus after each round
+- Continues until 85%+ team agreement OR maximum rounds reached
+- AI Moderator guides discussion toward resolution
+- Adapts persona ordering based on unresolved issues
+
+### When to Use Dynamic Rounds
+
+✅ **Ideal for:**
+- Complex system designs (microservices, architecture decisions)
+- Multi-stakeholder requirements with potential conflicts  
+- Technical specifications requiring deep exploration
+- Situations where thoroughness is more important than speed
+
+⏸️ **Stick with Fixed Rounds for:**
+- Simple feature requests or bug fixes
+- Well-defined requirements with clear scope
+- Time-sensitive specifications
+- Proof-of-concept or exploratory work
+
+### Configuration Options
+
+```json
+{
+  "prompt": "Design a distributed authentication system with OAuth2, JWT, and RBAC",
+  "dynamicRounds": true,
+  "consensusConfig": {
+    "minRounds": 2,           // Minimum discussion rounds (default: 2)
+    "maxRounds": 8,           // Maximum to prevent infinite loops (default: 10)  
+    "consensusThreshold": 90, // Required agreement % to terminate (default: 85)
+    "conflictTolerance": 10,  // Max unresolved issues allowed (default: 15)
+    "moderatorEnabled": true  // Include AI Moderator guidance (default: true)
+  },
+  "dryRun": true
+}
+```
+
+### Enhanced Output
+
+With dynamic rounds enabled, you get additional insights:
+
+**DISCUSSION.md includes:**
+- 📊 **Consensus Evolution**: Agreement progression across rounds
+- 🎯 **Final Consensus Score**: Quantified team alignment level  
+- ⚖️ **Conflict Resolution**: Documentation of issues resolved
+- 📈 **Decision Quality**: Confidence levels and validation metrics
+
+**REQUEST.md includes:**
+- ✅ **Specification Quality Badge**: High/Medium based on consensus achieved
+- 🔍 **Completeness Indicator**: Whether all issues were resolved
+- 📋 **Consensus Summary**: Overview of the decision-making process
+
+### Performance & Token Usage
+
+The dynamic system is optimized for efficiency:
+- **Average increase**: +15% tokens compared to fixed rounds
+- **Simple topics**: Often use FEWER tokens (2 rounds vs 3)
+- **Complex topics**: Use more tokens but deliver higher quality
+- **Progressive summarization**: Prevents token explosion in long discussions
+- **Smart termination**: Stops when consensus is reached, not after fixed rounds
 
 ## Project Context Integration
 
@@ -476,9 +561,14 @@ pentaforge/
 │   │   ├── BusinessAnalyst.ts
 │   │   ├── ProductOwner.ts
 │   │   ├── ScrumMaster.ts
-│   │   └── SolutionsArchitect.ts
+│   │   ├── SolutionsArchitect.ts
+│   │   └── AIModerator.ts     # 🆕 AI consensus moderator
 │   ├── engine/
-│   │   └── discussion.ts       # Orchestration logic
+│   │   ├── discussion.ts       # Orchestration logic
+│   │   ├── consensusEvaluator.ts   # 🆕 AI consensus analysis
+│   │   └── dynamicRoundStrategy.ts # 🆕 Adaptive round generation
+│   ├── types/
+│   │   └── consensus.ts        # 🆕 Consensus type definitions
 │   ├── writers/                # Markdown generators
 │   │   ├── discussionWriter.ts
 │   │   └── requestWriter.ts
@@ -492,6 +582,8 @@ pentaforge/
 ├── tests/                      # Unit tests
 ├── Dockerfile                  # Container definition
 ├── docker-compose.yml          # Compose configuration
+├── CLAUDE.md                   # 📝 Updated with dynamic features
+├── PERFORMANCE_ANALYSIS.md     # 🆕 Token usage validation report
 └── package.json               # Node.js configuration
 ```
 

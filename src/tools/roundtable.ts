@@ -7,6 +7,7 @@ import { getTimestamp } from '../lib/clock.js';
 import { detectLanguage } from '../lib/i18n.js';
 import { readProjectContext } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
+import { createEnhancedConfig, DynamicRoundConfig } from '../types/consensus.js';
 import * as path from 'path';
 
 export interface RoundtableInput {
@@ -22,6 +23,16 @@ export interface RoundtableInput {
     path: string;
     content: string;
   }>;
+  
+  // NEW: Dynamic rounds configuration
+  dynamicRounds?: boolean;
+  consensusConfig?: {
+    minRounds?: number;        // Default: 2
+    maxRounds?: number;        // Default: 10  
+    consensusThreshold?: number; // Default: 85
+    conflictTolerance?: number;  // Default: 15
+    moderatorEnabled?: boolean;  // Default: true
+  };
 }
 
 export interface RoundtableOutput {
@@ -34,7 +45,7 @@ export interface RoundtableOutput {
 
 export const runRoundtableTool: Tool = {
   name: 'run_roundtable',
-  description: 'Orchestrate a structured roundtable discussion among 5 expert personas to produce PRP-ready specifications. Optionally provide project context via claudeMd and docsContext parameters for more relevant discussions.',
+  description: 'Orchestrate a structured roundtable discussion among 5 expert personas to produce PRP-ready specifications. Supports both fixed 3-round mode and adaptive dynamic rounds with AI-driven consensus evaluation. Optionally provide project context via claudeMd and docsContext parameters for more relevant discussions.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -81,6 +92,36 @@ export const runRoundtableTool: Tool = {
           }
         }
       },
+      dynamicRounds: {
+        type: 'boolean',
+        description: 'Enable dynamic rounds with AI-driven consensus evaluation (default: false for backward compatibility)',
+      },
+      consensusConfig: {
+        type: 'object',
+        description: 'Configuration for dynamic rounds consensus evaluation',
+        properties: {
+          minRounds: {
+            type: 'number',
+            description: 'Minimum rounds before consensus evaluation (default: 2)',
+          },
+          maxRounds: {
+            type: 'number',
+            description: 'Maximum rounds to prevent infinite discussions (default: 10)',
+          },
+          consensusThreshold: {
+            type: 'number',
+            description: 'Required agreement percentage to reach consensus (default: 85)',
+          },
+          conflictTolerance: {
+            type: 'number',
+            description: 'Maximum unresolved conflicts tolerated (default: 15)',
+          },
+          moderatorEnabled: {
+            type: 'boolean',
+            description: 'Include AI moderator in discussion rounds (default: true)',
+          },
+        },
+      },
     },
     required: ['prompt'],
   },
@@ -99,6 +140,8 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     model,
     claudeMd,
     docsContext,
+    dynamicRounds = false,
+    consensusConfig,
   } = input;
 
   if (!prompt || prompt.trim().length === 0) {
@@ -107,6 +150,19 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
 
   const timestamp = getTimestamp();
   log.info(`Timestamp: ${timestamp}, Language: ${language}, Tone: ${tone}`);
+  
+  // Log dynamic rounds configuration
+  if (dynamicRounds) {
+    const config = consensusConfig || {};
+    log.info(`🔄 Dynamic rounds enabled:`);
+    log.info(`   Min rounds: ${config.minRounds || 2}`);
+    log.info(`   Max rounds: ${config.maxRounds || 10}`);
+    log.info(`   Consensus threshold: ${config.consensusThreshold || 85}%`);
+    log.info(`   Conflict tolerance: ${config.conflictTolerance || 15}`);
+    log.info(`   Moderator enabled: ${config.moderatorEnabled !== false}`);
+  } else {
+    log.info(`📋 Using fixed 3-round mode (backward compatibility)`);
+  }
 
   // Create project context from provided parameters or fallback to local reading
   let projectContext;
@@ -130,14 +186,28 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
   }
   log.info(`🎯 Project context summary: ${projectContext.summary}`);
 
-  const discussion = await orchestrateDiscussion({
+  // Create enhanced discussion configuration
+  const baseConfig = {
     prompt,
     language,
     tone,
     timestamp,
     model,
     projectContext,
-  });
+  };
+  
+  const dynamicConfig: Partial<DynamicRoundConfig> | undefined = dynamicRounds ? {
+    enabled: true,
+    minRounds: consensusConfig?.minRounds,
+    maxRounds: consensusConfig?.maxRounds,
+    consensusThreshold: consensusConfig?.consensusThreshold,
+    conflictTolerance: consensusConfig?.conflictTolerance,
+    moderatorEnabled: consensusConfig?.moderatorEnabled,
+  } : undefined;
+  
+  const enhancedConfig = createEnhancedConfig(baseConfig, dynamicConfig);
+  
+  const discussion = await orchestrateDiscussion(enhancedConfig);
 
   const discussionContent = await writeDiscussionMarkdown(discussion, {
     language,
