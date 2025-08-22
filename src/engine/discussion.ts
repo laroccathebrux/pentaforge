@@ -162,10 +162,11 @@ export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): P
     // Dynamic rounds with consensus evaluation
     await executeDynamicRounds(discussion, personas, consensusEvaluator, dynamicStrategy, previousOrders);
     
-    // Check if consensus was reached - if not, potentially route to resolution workflow
+    // Check if we need resolution workflow based on final consensus metrics
     const finalConsensus = discussion.consensusHistory[discussion.consensusHistory.length - 1];
-    if (finalConsensus && !discussion.consensusReached && shouldTriggerResolutionWorkflow(finalConsensus, config)) {
-      log.info(`🔄 Consensus not reached - triggering interactive resolution workflow`);
+    if (finalConsensus && shouldTriggerResolutionWorkflow(finalConsensus, config)) {
+      log.info(`🔄 Unresolved issues detected - triggering interactive resolution workflow`);
+      log.info(`   Final metrics: agreement=${finalConsensus.agreementScore}%, unresolved=${finalConsensus.unresolvedIssues.length}, conflicts=${finalConsensus.conflictingPositions.size}`);
       await routeToResolutionWorkflow(discussion, finalConsensus);
       // Return early - don't generate decisions/next steps as we need user input
       return discussion;
@@ -632,15 +633,26 @@ function shouldTriggerResolutionWorkflow(
   config: EnhancedDiscussionConfig
 ): boolean {
   const threshold = config.unresolvedIssuesThreshold ?? 1;
+  const consensusThreshold = config.dynamicRounds?.consensusThreshold ?? 85;
   
   // Check if we have enough unresolved issues to warrant interactive resolution
   const hasUnresolvedIssues = consensusMetrics.unresolvedIssues.length >= threshold;
   const hasConflictingPositions = consensusMetrics.conflictingPositions.size > 0;
-  const lowAgreementScore = consensusMetrics.agreementScore < (config.dynamicRounds?.consensusThreshold ?? 85);
+  const lowAgreementScore = consensusMetrics.agreementScore < consensusThreshold;
   
-  log.debug(`🔍 Resolution workflow check: unresolved=${consensusMetrics.unresolvedIssues.length}, conflicts=${consensusMetrics.conflictingPositions.size}, agreement=${consensusMetrics.agreementScore}%`);
+  log.debug(`🔍 Resolution workflow check: unresolved=${consensusMetrics.unresolvedIssues.length}, conflicts=${consensusMetrics.conflictingPositions.size}, agreement=${consensusMetrics.agreementScore}%, threshold=${consensusThreshold}%`);
   
-  return hasUnresolvedIssues || (hasConflictingPositions && lowAgreementScore);
+  // Trigger if we have unresolved issues OR if we have conflicts with low agreement
+  // Key insight: Even with acceptable agreement, unresolved issues need user input
+  const shouldTrigger = hasUnresolvedIssues || (hasConflictingPositions && lowAgreementScore);
+  
+  if (shouldTrigger) {
+    log.info(`🎯 Resolution workflow SHOULD be triggered: hasUnresolved=${hasUnresolvedIssues}, hasConflicts=${hasConflictingPositions}, lowAgreement=${lowAgreementScore}`);
+  } else {
+    log.debug(`✅ No resolution needed: criteria not met`);
+  }
+  
+  return shouldTrigger;
 }
 
 /**
