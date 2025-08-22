@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Core Purpose
 
 PentaForge is an MCP (Model Context Protocol) server that orchestrates structured roundtable discussions among 5 expert personas to generate PRP-ready specifications. It transforms simple programming demands into comprehensive, actionable specifications compatible with PRPs-agentic-eng.
-
+ 
 ## Build and Development Commands
 
 ```bash
