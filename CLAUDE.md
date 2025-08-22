@@ -43,6 +43,9 @@ docker run --network host -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentafo
 
 # Or override AI service configuration
 docker run -e AI_PROVIDER=openai -e AI_API_KEY=your_key -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
+
+# Suppress JSON-RPC protocol logs (optional - for cleaner output)
+docker run -e SUPPRESS_MCP_LOGS=true -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest
 ```
 
 ## Architecture Overview

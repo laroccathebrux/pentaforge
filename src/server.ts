@@ -8,7 +8,42 @@ import { log } from './lib/log.js';
 import { createAIServiceFromEnv } from './lib/aiService.js';
 import { existsSync } from 'fs';
 
+// Suppress MCP SDK JSON-RPC handshake logs unless debug mode is enabled
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+function suppressMCPLogs() {
+  // Only suppress if explicitly requested to keep JSON-RPC logs hidden
+  if (process.env.SUPPRESS_MCP_LOGS === 'true') {
+    console.log = (...args: any[]) => {
+      const message = args.join(' ');
+      // Only suppress JSON-RPC protocol messages, allow other logs through
+      if (message.includes('"jsonrpc"') || message.includes('"protocolVersion"') || message.includes('"capabilities"') || message.includes('"tools"')) {
+        return; // Suppress these logs
+      }
+      originalConsoleLog(...args);
+    };
+    
+    console.error = (...args: any[]) => {
+      const message = args.join(' ');
+      // Suppress JSON-RPC error messages too  
+      if (message.includes('"jsonrpc"') || (message.includes('"error"') && message.includes('"id"'))) {
+        return; // Suppress these logs
+      }
+      originalConsoleError(...args);
+    };
+  }
+}
+
+function restoreConsoleLogs() {
+  console.log = originalConsoleLog;
+  console.error = originalConsoleError;
+}
+
 async function main(): Promise<void> {
+  // Suppress MCP SDK JSON-RPC logs if requested
+  suppressMCPLogs();
+  
   // Display AI configuration at startup
   const provider = process.env.AI_PROVIDER || 'ollama';
   let baseURL = process.env.AI_BASE_URL;
@@ -88,6 +123,9 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  
+  // Restore normal console logging after server is connected
+  restoreConsoleLogs();
   
   log.info('PentaForge MCP server started');
   console.log('✅ Server ready to accept connections');
