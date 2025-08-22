@@ -35,7 +35,7 @@ export interface RoundtableInput {
   };
   
   // NEW: Async execution option
-  async?: boolean;             // Default: false - run async in background
+  async?: boolean;             // Default: true - run async in background to prevent blocking Claude
 }
 
 export interface RoundtableOutput {
@@ -132,7 +132,7 @@ export const runRoundtableTool: Tool = {
       },
       async: {
         type: 'boolean',
-        description: 'Run discussion in background and return immediately (default: false for synchronous execution)',
+        description: 'Run discussion in background and return immediately (default: true to prevent blocking Claude)',
       },
     },
     required: ['prompt'],
@@ -144,7 +144,7 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
     prompt,
     outputDir = process.env.PENTAFORGE_OUTPUT_DIR || './PRPs/inputs',
     dryRun = false,
-    async: isAsync = false,
+    async: isAsync = true, // Default to async to prevent Claude from getting stuck
   } = input;
 
   if (!prompt || prompt.trim().length === 0) {
