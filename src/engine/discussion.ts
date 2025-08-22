@@ -51,7 +51,7 @@ export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): P
   
   // Create AI service - either with custom model or from environment
   let aiService: AIService;
-  const provider = (process.env.AI_PROVIDER || 'ollama') as any;
+  const provider = (process.env.AI_PROVIDER || 'ollama') as 'openai' | 'anthropic' | 'ollama';
   const apiKey = process.env.AI_API_KEY;
   let baseURL = process.env.AI_BASE_URL;
   
@@ -73,7 +73,7 @@ export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): P
   const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS) : 500;
   
   // Use custom model if specified, otherwise use environment model
-  const getDefaultModel = (p: string) => {
+  const getDefaultModel = (p: string): string => {
     switch (p) {
       case 'openai': return 'gpt-4o-mini';
       case 'anthropic': return 'claude-3-haiku-20240307';
@@ -140,7 +140,7 @@ export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): P
   // Initialize consensus system if dynamic rounds enabled
   let consensusEvaluator: ConsensusEvaluator | null = null;
   let dynamicStrategy: DynamicRoundStrategy | null = null;
-  let previousOrders: number[][] = [];
+  const previousOrders: number[][] = [];
   
   if (isDynamicRoundsEnabled(config)) {
     consensusEvaluator = new ConsensusEvaluator(aiService);
@@ -276,11 +276,122 @@ async function executeDynamicRounds(
 
   // Final consensus evaluation
   if (!consensusReached && roundIndex >= config.maxRounds) {
-    log.warn(`⚠️ Maximum rounds (${config.maxRounds}) reached without consensus`);
-    discussion.consensusReached = false;
+    log.warn(`⚠️ Maximum rounds (${config.maxRounds}) reached without consensus, initiating final consensus round`);
+    await executeFinalConsensusRound(discussion, personas, consensusEvaluator, dynamicStrategy);
   }
 
   log.info(`🏁 Dynamic discussion completed after ${roundIndex} rounds. Consensus: ${discussion.consensusReached}`);
+}
+
+/**
+ * Executes a final consensus round when max rounds reached without consensus
+ * Forces personas to focus on reaching agreement
+ */
+async function executeFinalConsensusRound(
+  discussion: EnhancedDiscussion,
+  personas: AIPersona[],
+  consensusEvaluator: ConsensusEvaluator,
+  _dynamicStrategy: DynamicRoundStrategy
+): Promise<void> {
+  const config = discussion.config.dynamicRounds || DEFAULT_DYNAMIC_CONFIG;
+  const finalRound = discussion.currentRound + 1;
+  discussion.currentRound = finalRound;
+  
+  log.info(`🎯 FINAL CONSENSUS ROUND ${finalRound}: Forcing team to reach agreement`);
+  
+  // Generate final consensus metrics from all previous rounds
+  let finalConsensusMetrics: ConsensusMetrics;
+  try {
+    const allPreviousTurns = discussion.rounds;
+    const evaluationResult = await consensusEvaluator.evaluateRound(allPreviousTurns, config, finalRound);
+    finalConsensusMetrics = evaluationResult.metrics;
+  } catch (error) {
+    log.warn(`🚨 Final consensus evaluation failed, using fallback: ${error}`);
+    finalConsensusMetrics = {
+      agreementScore: 70, // Assume moderate agreement
+      unresolvedIssues: ['Final decisions needed'],
+      conflictingPositions: new Map(),
+      confidenceLevel: 60,
+      discussionPhase: 'finalization',
+    };
+  }
+  
+  // Store final consensus metrics
+  discussion.consensusHistory.push(finalConsensusMetrics);
+  
+  // Generate final round order - prioritize decision makers
+  // Order: ProductOwner (decision maker), AIModerator (if enabled), then others
+  let finalOrder: number[];
+  if (config.moderatorEnabled) {
+    finalOrder = [2, 5, 0, 4, 3, 1]; // PO, Moderator, BA, Architect, SM, User
+  } else {
+    finalOrder = [2, 0, 4, 3, 1]; // PO, BA, Architect, SM, User
+  }
+  
+  log.info(`📋 Final consensus round order: [${finalOrder.map(i => personas[i]?.role || 'Unknown').join(', ')}]`);
+  
+  // Execute final turns with consensus-forcing context
+  for (const personaIndex of finalOrder) {
+    if (personaIndex >= personas.length) {
+      log.warn(`⚠️ Invalid persona index ${personaIndex}, skipping`);
+      continue;
+    }
+    
+    const persona = personas[personaIndex];
+    
+    log.debug(`🎯 Final Round: ${persona.role} (${persona.name}) taking turn to force consensus...`);
+    
+    try {
+      // Add special context for final consensus round
+      const finalPrompt = addFinalConsensusContext(
+        discussion.config.prompt,
+        finalConsensusMetrics,
+        discussion.config.language
+      );
+      
+      const response = await persona.generateResponse({
+        prompt: finalPrompt,
+        language: discussion.config.language,
+        tone: discussion.config.tone,
+        previousTurns: discussion.rounds, // Full memory context
+        projectContext: discussion.config.projectContext,
+      });
+      
+      const turn: Turn = {
+        round: finalRound,
+        speaker: persona.name,
+        role: persona.role,
+        content: response,
+      };
+      
+      discussion.rounds.push(turn);
+      log.info(`✅ Final Round: ${persona.role} (${persona.name}) completed consensus turn`);
+    } catch (error) {
+      log.error(`🚨 Failed to generate final consensus response for ${persona.role}: ${error}`);
+      // Continue with other personas even if one fails
+    }
+  }
+  
+  // Mark consensus as reached after final round
+  discussion.consensusReached = true;
+  log.info(`✅ Final consensus round completed - consensus forced`);
+}
+
+/**
+ * Adds special context to prompt for final consensus round
+ */
+function addFinalConsensusContext(
+  originalPrompt: string,
+  metrics: ConsensusMetrics,
+  language: string
+): string {
+  const isPortuguese = language === 'pt' || language === 'pt-BR';
+  
+  const consensusContext = isPortuguese
+    ? `\n\n===== RODADA FINAL DE CONSENSO =====\nEsta é a rodada final. A equipe DEVE chegar a um acordo sobre:\n${metrics.unresolvedIssues.map(issue => `• ${issue}`).join('\n')}\nFoque em encontrar soluções que todos possam aceitar. Seja decisivo e pragmático.`
+    : `\n\n===== FINAL CONSENSUS ROUND =====\nThis is the final round. The team MUST reach agreement on:\n${metrics.unresolvedIssues.map(issue => `• ${issue}`).join('\n')}\nFocus on finding solutions everyone can accept. Be decisive and pragmatic.`;
+  
+  return originalPrompt + consensusContext;
 }
 
 /**
