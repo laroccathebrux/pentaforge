@@ -13,16 +13,27 @@
     "docker:build": "docker build -t pentaforge:latest .",
     "docker:run": "docker run -i --rm -v $(pwd)/PRPs/inputs:/app/PRPs/inputs pentaforge:latest"
   },
-  "keywords": ["mcp", "server", "roundtable", "prp", "agile", "specification"],
+  "keywords": [
+    "mcp",
+    "server",
+    "roundtable",
+    "prp",
+    "agile",
+    "specification"
+  ],
   "author": "PentaForge Team",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.33.0",
     "@modelcontextprotocol/sdk": "^1.17.3",
-    "openai": "^4.67.3",
-    "@anthropic-ai/sdk": "^0.33.0"
+    "gray-matter": "^4.0.3",
+    "markdown-it": "^13.0.2",
+    "markdown-it-task-checkbox": "^1.0.6",
+    "openai": "^4.67.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
+    "@types/markdown-it": "^12.2.3",
     "@types/node": "^20.11.30",
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",

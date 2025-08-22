@@ -122,6 +122,10 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
   - `conflictTolerance`: Maximum unresolved conflicts (default: 15)
   - `moderatorEnabled`: Include AI moderator rounds (default: true)
 
+**NEW: Interactive Issue Resolution Parameters**
+- `unresolvedIssuesFile`: Path to resolved UNRESOLVED_ISSUES.md file for final generation
+- `unresolvedIssuesThreshold`: Threshold for unresolved issues before switching to interactive mode (default: 1)
+
 **Example with Context (Fixed Rounds):**
 ```json
 {
@@ -152,8 +156,67 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
 }
 ```
 
+**Example with Issue Resolution:**
+```json
+{
+  "prompt": "Design authentication system",
+  "unresolvedIssuesFile": "./PRPs/inputs/UNRESOLVED_ISSUES_20240822T143022Z.md",
+  "dryRun": true
+}
+```
+
+### Interactive Issue Resolution Workflow
+
+When discussions conclude with unresolved issues, PentaForge can generate an interactive UNRESOLVED_ISSUES.md file instead of an incomplete REQUEST.md. This workflow allows users to provide input on contested points:
+
+**Phase 1: Issue Detection**
+- System detects when `finalConsensus.unresolvedIssues.length >= unresolvedIssuesThreshold`
+- Generates UNRESOLVED_ISSUES.md with persona positions and voting options
+- Each issue includes options for each persona's position, "No strong preference", and "Custom"
+
+**Phase 2: User Resolution**  
+- User reviews generated file and marks preferences using checkboxes
+- Can select existing persona positions or provide custom solutions
+- Must resolve all issues before proceeding
+
+**Phase 3: Final Generation**
+- User re-runs PentaForge with `unresolvedIssuesFile` parameter
+- System generates final REQUEST.md using user's resolved preferences
+- No additional persona discussion needed
+
+**File Format Example:**
+```markdown
+## Issue 1: Authentication Method Selection
+
+### SolutionsArchitect Position
+- [ ] Use OAuth 2.0 with external providers only
+**Reasoning:** Reduces development complexity and maintenance overhead
+
+### BusinessStakeholder Position  
+- [ ] Implement custom JWT-based authentication
+**Reasoning:** Provides full control and can integrate with existing systems
+
+### Additional Options
+- [x] **Custom** - I have my own preference (describe below)
+
+**Custom Resolution:**
+Use OAuth 2.0 as primary with JWT fallback for internal services
+```
+
 ### File System Operations
 All file operations use atomic writes through `src/lib/fs.ts` to prevent corruption. Files are timestamped with format `YYYY-MM-DDTHHMMSSZ`.
+
+**Interactive Issue Files:**
+- UNRESOLVED_ISSUES.md files are generated with timestamp format `UNRESOLVED_ISSUES_YYYY-MM-DDTHHMMSSZ.md`
+- Files include voting checkboxes and require exactly one selection per issue
+- Support both Portuguese and English based on original discussion language
+- Custom input validation ensures complete resolution before regeneration
+
+**⚠️ CRITICAL FIX (Latest):**
+- Fixed consensus routing logic that prevented resolution workflow triggering when unresolved issues were present
+- System now correctly generates UNRESOLVED_ISSUES.md when `finalConsensus.unresolvedIssues.length >= threshold`
+- Resolution workflow triggers based on final metrics only, not consensus history
+- Added comprehensive logging for workflow decision transparency
 
 ### Docker Considerations
 - Runs as non-root user (UID 1001)
@@ -289,6 +352,52 @@ Test dry run mode to see outputs without file writes:
 
 When AI is **working**: You'll see `🤖`, `✅`, and `⚡` emojis showing successful AI responses.
 When using **fallback**: You'll see `🚨`, `🔄`, and `📝` emojis showing hardcoded responses are being used.
+
+## Troubleshooting
+
+### Interactive Issue Resolution
+
+**Problem**: UNRESOLVED_ISSUES.md generated but I want REQUEST.md anyway  
+**Solution**: Set `unresolvedIssuesThreshold` to a high value (e.g., 999) to disable interactive mode
+
+**Problem**: "Invalid selections" error when using resolved file  
+**Solution**: Ensure exactly one checkbox is marked [x] for each issue. Check for:
+- Multiple selections: `- [x]` and `- [x]` on same issue
+- No selections: All checkboxes still `- [ ]`
+- Missing custom input: Selected "Custom" but no description provided
+
+**Problem**: File format not recognized  
+**Solution**: Ensure the UNRESOLVED_ISSUES.md file hasn't been modified outside the checkbox selections and custom input areas
+
+**Problem**: Consensus threshold too low/high  
+**Solution**: Adjust `consensusThreshold` in `consensusConfig`:
+- Lower (70-80): More permissive, fewer unresolved issues
+- Higher (90-95): Stricter consensus requirement, more unresolved issues
+
+**Problem**: Too many issues generated  
+**Solution**: Increase `conflictTolerance` in `consensusConfig` or use fewer personas in complex discussions
+
+### Dynamic Rounds Issues
+
+**Problem**: Discussion taking too long  
+**Solution**: Reduce `maxRounds` or increase `consensusThreshold` for faster termination
+
+**Problem**: AI consensus evaluation failing  
+**Solution**: Check AI service configuration. System will fall back to rule-based evaluation automatically
+
+**Problem**: Moderator causing infinite loops  
+**Solution**: Set `moderatorEnabled: false` in `consensusConfig` to disable AI moderator
+
+### General Troubleshooting
+
+**Problem**: Files not generated  
+**Solution**: Check directory permissions and ensure `outputDir` path is valid and writable
+
+**Problem**: Non-English output despite English input  
+**Solution**: Explicitly set `language: "en"` parameter to override auto-detection
+
+**Problem**: AI responses too short/long  
+**Solution**: Adjust `AI_MAX_TOKENS` environment variable (default: 500)
 
 ## PRP Integration
 

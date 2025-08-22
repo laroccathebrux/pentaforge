@@ -24,6 +24,7 @@ import {
   isDynamicRoundsEnabled,
   DEFAULT_DYNAMIC_CONFIG,
 } from '../types/consensus.js';
+import { writeUnresolvedIssuesMarkdown } from '../writers/unresolvedIssuesWriter.js';
 
 export interface DiscussionConfig {
   prompt: string;
@@ -32,6 +33,8 @@ export interface DiscussionConfig {
   timestamp: string;
   model?: string;
   projectContext?: ProjectContext;
+  outputDir?: string;
+  unresolvedIssuesThreshold?: number;
 }
 
 export interface Discussion {
@@ -158,6 +161,16 @@ export async function orchestrateDiscussion(config: EnhancedDiscussionConfig): P
   if (isDynamicRoundsEnabled(config) && consensusEvaluator && dynamicStrategy) {
     // Dynamic rounds with consensus evaluation
     await executeDynamicRounds(discussion, personas, consensusEvaluator, dynamicStrategy, previousOrders);
+    
+    // Check if we need resolution workflow based on final consensus metrics
+    const finalConsensus = discussion.consensusHistory[discussion.consensusHistory.length - 1];
+    if (finalConsensus && shouldTriggerResolutionWorkflow(finalConsensus, config)) {
+      log.info(`🔄 Unresolved issues detected - triggering interactive resolution workflow`);
+      log.info(`   Final metrics: agreement=${finalConsensus.agreementScore}%, unresolved=${finalConsensus.unresolvedIssues.length}, conflicts=${finalConsensus.conflictingPositions.size}`);
+      await routeToResolutionWorkflow(discussion, finalConsensus);
+      // Return early - don't generate decisions/next steps as we need user input
+      return discussion;
+    }
   } else {
     // Fixed 3-round mode (backward compatibility)
     await executeFixedRounds(discussion, personas);
@@ -609,5 +622,84 @@ async function generateAINextSteps(prompt: string, language: string): Promise<st
         ? 'Definir próximos passos baseados nos requisitos do projeto'
         : 'Define next steps based on project requirements'
     ];
+  }
+}
+
+/**
+ * Determines whether to trigger the interactive resolution workflow
+ */
+function shouldTriggerResolutionWorkflow(
+  consensusMetrics: ConsensusMetrics,
+  config: EnhancedDiscussionConfig
+): boolean {
+  const threshold = config.unresolvedIssuesThreshold ?? 1;
+  const consensusThreshold = config.dynamicRounds?.consensusThreshold ?? 85;
+  
+  // Check if we have enough unresolved issues to warrant interactive resolution
+  const hasUnresolvedIssues = consensusMetrics.unresolvedIssues.length >= threshold;
+  const hasConflictingPositions = consensusMetrics.conflictingPositions.size > 0;
+  const lowAgreementScore = consensusMetrics.agreementScore < consensusThreshold;
+  
+  log.debug(`🔍 Resolution workflow check: unresolved=${consensusMetrics.unresolvedIssues.length}, conflicts=${consensusMetrics.conflictingPositions.size}, agreement=${consensusMetrics.agreementScore}%, threshold=${consensusThreshold}%`);
+  
+  // Trigger if we have unresolved issues OR if we have conflicts with low agreement
+  // Key insight: Even with acceptable agreement, unresolved issues need user input
+  const shouldTrigger = hasUnresolvedIssues || (hasConflictingPositions && lowAgreementScore);
+  
+  if (shouldTrigger) {
+    log.info(`🎯 Resolution workflow SHOULD be triggered: hasUnresolved=${hasUnresolvedIssues}, hasConflicts=${hasConflictingPositions}, lowAgreement=${lowAgreementScore}`);
+  } else {
+    log.debug(`✅ No resolution needed: criteria not met`);
+  }
+  
+  return shouldTrigger;
+}
+
+/**
+ * Routes to the interactive resolution workflow when consensus fails
+ */
+async function routeToResolutionWorkflow(
+  discussion: EnhancedDiscussion,
+  consensusMetrics: ConsensusMetrics
+): Promise<void> {
+  try {
+    log.info('🎯 Routing to interactive resolution workflow');
+    
+    const outputDir = discussion.config.outputDir || './PRPs/inputs';
+    const consensusThreshold = discussion.config.dynamicRounds?.consensusThreshold ?? 85;
+    
+    const filePath = await writeUnresolvedIssuesMarkdown(
+      discussion,
+      consensusMetrics,
+      {
+        language: discussion.config.language,
+        timestamp: discussion.config.timestamp,
+        prompt: discussion.config.prompt,
+        outputDir,
+        consensusThreshold,
+      }
+    );
+    
+    const isPortuguese = discussion.config.language === 'pt' || discussion.config.language === 'pt-BR';
+    
+    log.info(`✅ Generated interactive resolution file: ${filePath}`);
+    
+    // Add a marker to indicate this discussion needs resolution
+    discussion.consensusReached = false;
+    
+    // Add special metadata to track resolution state
+    (discussion as any).requiresUserResolution = true;
+    (discussion as any).resolutionFilePath = filePath;
+    
+    if (isPortuguese) {
+      log.info(`📋 Próximos passos: Revise o arquivo ${filePath}, marque suas preferências e execute novamente o PentaForge com o parâmetro unresolvedIssuesFile`);
+    } else {
+      log.info(`📋 Next steps: Review the file ${filePath}, mark your preferences, and run PentaForge again with the unresolvedIssuesFile parameter`);
+    }
+    
+  } catch (error) {
+    log.error(`🚨 Failed to route to resolution workflow: ${error}`);
+    // Fallback - continue with normal flow even if resolution workflow fails
+    throw error;
   }
 }

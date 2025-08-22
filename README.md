@@ -40,6 +40,14 @@ The result is two markdown documents ready for use with [PRPs-agentic-eng](https
 - 🔒 **Backward Compatible**: Fixed 3-round mode remains default (opt-in for dynamic)
 - ⚡ **Async Execution**: Non-blocking background processing for long discussions
 
+### 🆕 Interactive Issue Resolution Workflow
+- 🎯 **Smart Consensus Failure Detection**: Automatically identifies when discussions have unresolved issues
+- 📝 **Interactive UNRESOLVED_ISSUES.md Generation**: Creates structured markdown files with persona positions and voting interfaces
+- ☑️ **Checkbox-Based Resolution**: Users select preferred solutions through simple markdown checkboxes
+- 🌐 **Bilingual Support**: Full English and Portuguese support for resolution workflow
+- 🔒 **Validation & Security**: Input sanitization and comprehensive resolution validation
+- 🔄 **Seamless Re-processing**: Generate final specifications from user-resolved files
+
 ## Installation
 
 ### Local Installation
@@ -287,6 +295,8 @@ If you need to call the tool manually with specific parameters:
 - **dynamicRounds** (optional): Enable AI-driven consensus evaluation (default: false)
 - **consensusConfig** (optional): Configure dynamic behavior (thresholds, rounds, etc.)
 - **async** (optional): Run in background and return immediately (default: false)
+- **unresolvedIssuesFile** (optional): Path to user-resolved UNRESOLVED_ISSUES.md file for final generation
+- **unresolvedIssuesThreshold** (optional): Minimum unresolved issues to trigger interactive workflow (default: 1)
 
 ## Dynamic Consensus System 🆕
 
@@ -425,6 +435,175 @@ PentaForge now supports **non-blocking execution** that allows you to continue w
 - When you need immediate results
 - Quick proof-of-concept discussions
 - Testing and development
+
+## Interactive Issue Resolution Workflow 🆕
+
+When dynamic discussions fail to reach consensus due to unresolved issues, PentaForge automatically transitions to an **Interactive Resolution Workflow** that lets you manually resolve contested points before generating the final specification.
+
+### How It Works
+
+**Phase 1: Consensus Failure Detection**
+- System detects when final consensus metrics show unresolved issues (≥ threshold)
+- Instead of generating incomplete REQUEST.md, creates interactive UNRESOLVED_ISSUES.md
+- File contains structured presentation of persona positions and voting options
+
+**Phase 2: User Resolution**
+- Review each unresolved issue with expert persona positions and reasoning
+- Select preferred approach using markdown checkboxes (exactly one per issue)
+- Options include: Accept specific persona approach, "No strong preference", or provide custom solution
+- Must resolve ALL issues before proceeding
+
+**Phase 3: Final Specification Generation**  
+- Re-run PentaForge with `unresolvedIssuesFile` parameter pointing to your resolved file
+- System processes your selections and generates final REQUEST.md
+- No additional persona discussions needed - uses your resolved decisions
+
+### Example Scenario
+
+**1. Initial Discussion with Consensus Failure**
+```json
+{
+  "prompt": "Design authentication system with OAuth2, JWT, and complex RBAC requirements",
+  "dynamicRounds": true,
+  "consensusConfig": {
+    "consensusThreshold": 90
+  }
+}
+```
+
+**Result**: Discussion reaches 85% agreement but has 2 unresolved issues
+```
+Round 3: 85% agreement, 2 unresolved issues → Generates UNRESOLVED_ISSUES_2024-01-15T143022Z.md
+```
+
+**2. Generated UNRESOLVED_ISSUES.md Structure**
+```markdown
+---
+discussionId: "2024-01-15T143022Z-a3x9k2"
+timestamp: "2024-01-15T143022Z"
+consensusThreshold: 90
+totalIssues: 2
+status: "pending"
+language: "en"
+---
+
+# Unresolved Issues - Interactive Resolution
+
+## Issue 1: JWT Token Expiration Strategy
+
+**Context:** Team disagreed on token lifetime and refresh mechanism approach.
+
+### Expert Positions:
+
+#### SolutionsArchitect
+**Position:** Use short-lived access tokens (15 minutes) with refresh tokens
+**Reasoning:** Balances security with user experience, industry standard approach
+
+#### BusinessStakeholder  
+**Position:** Use longer-lived tokens (24 hours) with sliding expiration
+**Reasoning:** Reduces server load and improves user experience for trusted environments
+
+### Your Resolution:
+- [ ] Accept SolutionsArchitect's approach
+- [ ] Accept BusinessStakeholder's approach  
+- [ ] No strong preference - team decides
+- [x] Custom resolution (describe below)
+
+**Custom Resolution:**
+```
+Use 1-hour access tokens with 7-day refresh tokens. Implement automatic refresh 
+in frontend. Provide admin toggle for environment-specific token lifetimes.
+```
+
+## Issue 2: Role Hierarchy Implementation
+[Similar structure for second issue...]
+```
+
+**3. Process Resolved Issues**
+```json
+{
+  "prompt": "Design authentication system with OAuth2, JWT, and complex RBAC requirements",
+  "unresolvedIssuesFile": "./PRPs/inputs/UNRESOLVED_ISSUES_2024-01-15T143022Z.md"
+}
+```
+
+**Result**: Generates final REQUEST.md incorporating your resolved decisions
+
+### When Issues Trigger Resolution Workflow
+
+✅ **Triggers Interactive Resolution:**
+- `finalConsensus.unresolvedIssues.length >= unresolvedIssuesThreshold` (default: 1)
+- Complex technical disagreements between personas
+- Business vs. technical trade-off decisions
+- Architecture choice conflicts (database, frameworks, patterns)
+- Security vs. usability debates
+
+❌ **Continues Normal Flow:**
+- All issues resolved through discussion
+- Agreement score meets consensus threshold
+- No significant conflicts detected
+- Simple implementation decisions
+
+### Resolution File Features
+
+**Bilingual Support**
+- Automatically generates in English or Portuguese based on original discussion
+- Localized instructions, error messages, and interface text
+
+**Security & Validation**
+- Input sanitization prevents malicious content injection
+- Comprehensive validation ensures all issues are resolved
+- Clear error messages guide users to complete resolution
+
+**File Format Validation**
+- YAML front matter with metadata and status tracking
+- Structured markdown with consistent formatting
+- Checkbox parsing with strict single-selection enforcement
+
+### Resolution Options
+
+**Accept Persona Position**: Choose existing expert recommendation
+**No Strong Preference**: Let implementation team decide  
+**Custom Resolution**: Provide your own solution with detailed description
+
+### Error Handling & Validation
+
+```bash
+# Common validation errors and solutions:
+
+❌ Multiple selections for single issue
+💡 Mark exactly one checkbox per issue
+
+❌ Missing custom resolution description  
+💡 Provide detailed description when selecting custom option
+
+❌ Unresolved issues remaining
+💡 Every issue must have exactly one selection
+
+❌ Invalid file format
+💡 Don't modify YAML front matter or markdown structure
+```
+
+### Advanced Configuration
+
+**Customize Resolution Threshold**
+```json
+{
+  "prompt": "Complex system design...",
+  "dynamicRounds": true,
+  "unresolvedIssuesThreshold": 3,  // Only trigger if ≥3 unresolved issues
+  "consensusConfig": {
+    "consensusThreshold": 85
+  }
+}
+```
+
+**Benefits of Interactive Resolution**
+- 🎯 **Human Oversight**: Critical decisions get human input where AI consensus fails
+- 📈 **Quality Assurance**: Final specifications reflect real-world constraints and preferences  
+- 🔄 **Iterative Refinement**: Resolve complex issues step-by-step rather than accepting incomplete specs
+- 🌐 **Cultural Adaptation**: Bilingual support ensures global team compatibility
+- 📝 **Audit Trail**: Complete record of decisions and reasoning for future reference
 
 ## Project Context Integration
 
@@ -621,7 +800,7 @@ pentaforge/
 ├── src/
 │   ├── server.ts              # MCP server entry point
 │   ├── tools/
-│   │   └── roundtable.ts       # Main tool implementation
+│   │   └── roundtable.ts       # Main tool implementation (🔧 enhanced with resolution processing)
 │   ├── personas/               # Expert persona classes
 │   │   ├── base.ts            # Base persona interface
 │   │   ├── aiPersona.ts       # AI-powered persona base class
@@ -630,24 +809,34 @@ pentaforge/
 │   │   ├── ProductOwner.ts
 │   │   ├── ScrumMaster.ts
 │   │   ├── SolutionsArchitect.ts
+│   │   ├── UXUIDesigner.ts    # 🆕 UX/UI design expertise
+│   │   ├── SupportRepresentative.ts # 🆕 Customer success perspective
+│   │   ├── BusinessStakeholder.ts   # 🆕 Market and ROI focus
 │   │   └── AIModerator.ts     # 🆕 AI consensus moderator
 │   ├── engine/
-│   │   ├── discussion.ts       # Orchestration logic
-│   │   ├── consensusEvaluator.ts   # 🆕 AI consensus analysis
+│   │   ├── discussion.ts       # Orchestration logic (🔧 enhanced with resolution routing)
+│   │   ├── consensusEvaluator.ts   # 🆕 AI consensus analysis + persona position extraction
 │   │   └── dynamicRoundStrategy.ts # 🆕 Adaptive round generation
 │   ├── types/
-│   │   └── consensus.ts        # 🆕 Consensus type definitions
+│   │   ├── consensus.ts        # 🆕 Consensus type definitions
+│   │   ├── unresolvedIssues.ts # 🆕 Interactive resolution workflow types
+│   │   └── markdown-it-task-checkbox.d.ts # 🆕 TypeScript definitions
 │   ├── writers/                # Markdown generators
 │   │   ├── discussionWriter.ts
-│   │   └── requestWriter.ts
-│   └── lib/                    # Utilities
-│       ├── aiService.ts       # Multi-provider AI integration
-│       ├── clock.ts
-│       ├── id.ts
-│       ├── i18n.ts
-│       ├── fs.ts
-│       └── log.ts
+│   │   ├── requestWriter.ts    # 🔧 Enhanced with pre-resolved consensus support
+│   │   └── unresolvedIssuesWriter.ts # 🆕 Interactive UNRESOLVED_ISSUES.md generator
+│   ├── lib/                    # Utilities
+│   │   ├── aiService.ts       # Multi-provider AI integration
+│   │   ├── unresolvedIssuesParser.ts # 🆕 Parse and validate user-resolved files
+│   │   ├── clock.ts
+│   │   ├── id.ts
+│   │   ├── i18n.ts
+│   │   ├── fs.ts
+│   │   └── log.ts
 ├── tests/                      # Unit tests
+│   ├── personas.test.ts       # Persona response testing
+│   ├── roundtable.test.ts     # End-to-end workflow testing
+│   └── unresolvedIssues.test.ts # 🆕 Interactive resolution workflow testing (26 tests)
 ├── Dockerfile                  # Container definition
 ├── docker-compose.yml          # Compose configuration
 ├── CLAUDE.md                   # 📝 Updated with dynamic features
