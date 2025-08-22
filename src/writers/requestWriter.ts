@@ -593,18 +593,45 @@ function generateConsensusSummary(discussion: EnhancedDiscussion, isPortuguese: 
           );
         }
       } else {
-        lines.push('');
-        lines.push(isPortuguese 
-          ? `⚠️ **Nota:** Consenso completo não foi alcançado dentro do limite máximo de rodadas. Pode ser necessário esclarecimento adicional.`
-          : `⚠️ **Note:** Complete consensus was not reached within maximum rounds. Additional clarification may be needed.`
-        );
+        // Check if this discussion came from user resolution processing
+        const isResolutionProcessed = (discussion as any).consensusHistory?.[0]?.agreementScore === 100 && 
+                                     (discussion as any).rounds?.[0]?.role === 'Resolution Processor';
         
-        if (finalConsensus.unresolvedIssues.length > 0) {
+        if (isResolutionProcessed) {
           lines.push('');
-          lines.push(`**${isPortuguese ? 'Questões Pendentes' : 'Pending Issues'}:**`);
-          finalConsensus.unresolvedIssues.slice(0, 3).forEach((issue: string) => {
-            lines.push(`- ${issue}`);
-          });
+          lines.push(isPortuguese 
+            ? `🎯 **Resolução Interativa:** Esta especificação foi completada através do processo de resolução interativa de questões.`
+            : `🎯 **Interactive Resolution:** This specification was completed through the interactive issue resolution process.`
+          );
+          lines.push('');
+          lines.push(isPortuguese 
+            ? `✅ **Consenso Final:** Todas as questões foram resolvidas através de seleções do usuário baseadas em posições dos especialistas.`
+            : `✅ **Final Consensus:** All issues were resolved through user selections based on expert positions.`
+          );
+          lines.push('');
+          lines.push(isPortuguese 
+            ? `📊 **Qualidade da Decisão:** Alta qualidade através da combinação de análise de especialistas e decisões informadas do usuário.`
+            : `📊 **Decision Quality:** High quality through combination of expert analysis and informed user decisions.`
+          );
+        } else {
+          lines.push('');
+          lines.push(isPortuguese 
+            ? `⚠️ **Nota:** Consenso completo não foi alcançado dentro do limite máximo de rodadas. Pode ser necessário esclarecimento adicional.`
+            : `⚠️ **Note:** Complete consensus was not reached within maximum rounds. Additional clarification may be needed.`
+          );
+          
+          if (finalConsensus.unresolvedIssues.length > 0) {
+            lines.push('');
+            lines.push(`**${isPortuguese ? 'Questões Pendentes' : 'Pending Issues'}:**`);
+            finalConsensus.unresolvedIssues.slice(0, 3).forEach((issue: string) => {
+              lines.push(`- ${issue}`);
+            });
+            lines.push('');
+            lines.push(isPortuguese 
+              ? `💡 **Sugestão:** Use o sistema de resolução interativa habilitando \`dynamicRounds: true\` e \`unresolvedIssuesThreshold: 1\` para resolver estas questões colaborativamente.`
+              : `💡 **Suggestion:** Use the interactive resolution system by enabling \`dynamicRounds: true\` and \`unresolvedIssuesThreshold: 1\` to resolve these issues collaboratively.`
+            );
+          }
         }
       }
     }

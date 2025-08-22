@@ -12,6 +12,7 @@ import {
   RoundEvaluationResult,
   DecisionEvolution,
 } from '../types/consensus.js';
+import { PersonaPosition } from '../types/unresolvedIssues.js';
 
 export class ConsensusEvaluator {
   constructor(private aiService: AIService) {}
@@ -404,5 +405,221 @@ Be precise and analytical. Focus on measurable consensus indicators.`;
     );
     
     return foundTopics.length > 0 ? foundTopics : ['General implementation'];
+  }
+
+  /**
+   * Extracts detailed persona positions for unresolved issues
+   * Maps specific issues to persona positions with reasoning
+   */
+  extractPersonaPositions(turns: Turn[]): Map<string, PersonaPosition[]> {
+    const personaPositionsMap = new Map<string, PersonaPosition[]>();
+    
+    try {
+      log.debug('🔍 Extracting persona positions from discussion turns');
+      
+      // Group turns by persona for analysis
+      const turnsByPersona = new Map<string, Turn[]>();
+      turns.forEach(turn => {
+        if (!turnsByPersona.has(turn.role)) {
+          turnsByPersona.set(turn.role, []);
+        }
+        turnsByPersona.get(turn.role)!.push(turn);
+      });
+      
+      // Extract issues from the turns
+      const detectedIssues = this.detectIssuesFromTurns(turns);
+      
+      // For each detected issue, find persona positions
+      detectedIssues.forEach(issue => {
+        const positions: PersonaPosition[] = [];
+        
+        turnsByPersona.forEach((personaTurns, personaName) => {
+          const relevantTurns = personaTurns.filter(turn => 
+            this.isRelevantToIssue(turn.content, issue)
+          );
+          
+          if (relevantTurns.length > 0) {
+            const position = this.extractPositionFromTurns(relevantTurns, issue);
+            if (position) {
+              positions.push({
+                personaName: personaName.replace(/\s+/g, ''),
+                position: position.position,
+                reasoning: position.reasoning,
+                confidence: position.confidence,
+              });
+            }
+          }
+        });
+        
+        if (positions.length > 0) {
+          personaPositionsMap.set(issue, positions);
+        }
+      });
+      
+      log.debug(`✅ Extracted ${personaPositionsMap.size} issues with persona positions`);
+      return personaPositionsMap;
+      
+    } catch (error) {
+      log.warn(`🚨 Failed to extract persona positions: ${error}`);
+      return new Map();
+    }
+  }
+  
+  /**
+   * Detects key issues from discussion turns
+   */
+  private detectIssuesFromTurns(turns: Turn[]): string[] {
+    const issues: string[] = [];
+    const content = turns.map(turn => turn.content).join(' ').toLowerCase();
+    
+    // Technical decision patterns
+    const technicalPatterns = [
+      { keywords: ['auth', 'authentication', 'login'], issue: 'Authentication approach' },
+      { keywords: ['database', 'db', 'storage', 'persistence'], issue: 'Data storage strategy' },
+      { keywords: ['api', 'endpoint', 'service'], issue: 'API design approach' },
+      { keywords: ['frontend', 'ui', 'interface'], issue: 'User interface approach' },
+      { keywords: ['deploy', 'deployment', 'hosting'], issue: 'Deployment strategy' },
+      { keywords: ['test', 'testing', 'qa'], issue: 'Testing approach' },
+      { keywords: ['security', 'secure', 'protect'], issue: 'Security implementation' },
+      { keywords: ['performance', 'scale', 'optimize'], issue: 'Performance optimization' },
+    ];
+    
+    // Check for pattern matches
+    technicalPatterns.forEach(pattern => {
+      const matches = pattern.keywords.some(keyword => content.includes(keyword));
+      if (matches) {
+        issues.push(pattern.issue);
+      }
+    });
+    
+    // Detect disagreement indicators
+    const disagreementIndicators = ['however', 'but', 'concern', 'issue', 'problem', 'disagree', 'instead', 'alternatively'];
+    const hasDisagreement = disagreementIndicators.some(indicator => content.includes(indicator));
+    
+    if (hasDisagreement && issues.length === 0) {
+      issues.push('Technical approach disagreement');
+    }
+    
+    // Fallback if no specific issues detected
+    if (issues.length === 0) {
+      issues.push('Implementation details');
+    }
+    
+    return issues.slice(0, 5); // Limit to 5 main issues
+  }
+  
+  /**
+   * Checks if a turn content is relevant to a specific issue
+   */
+  private isRelevantToIssue(content: string, issue: string): boolean {
+    const contentLower = content.toLowerCase();
+    const issueLower = issue.toLowerCase();
+    
+    // Direct keyword matching
+    const issueKeywords = issueLower.split(' ');
+    const directMatch = issueKeywords.some(keyword => 
+      keyword.length > 3 && contentLower.includes(keyword)
+    );
+    
+    if (directMatch) return true;
+    
+    // Semantic similarity for common technical terms
+    const semanticMatches: Record<string, string[]> = {
+      'authentication': ['login', 'auth', 'user', 'security', 'credential'],
+      'database': ['data', 'storage', 'persist', 'query', 'table'],
+      'api': ['service', 'endpoint', 'rest', 'request', 'response'],
+      'interface': ['ui', 'frontend', 'view', 'component', 'design'],
+      'deployment': ['host', 'server', 'cloud', 'deploy', 'infrastructure'],
+    };
+    
+    for (const [concept, keywords] of Object.entries(semanticMatches)) {
+      if (issueLower.includes(concept)) {
+        const semanticMatch = keywords.some(keyword => contentLower.includes(keyword));
+        if (semanticMatch) return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Extracts position and reasoning from persona turns
+   */
+  private extractPositionFromTurns(turns: Turn[], _issue: string): {
+    position: string;
+    reasoning: string;
+    confidence: number;
+  } | null {
+    if (turns.length === 0) return null;
+    
+    // Use the most recent, comprehensive turn
+    const primaryTurn = turns.reduce((prev, current) => 
+      current.content.length > prev.content.length ? current : prev
+    );
+    
+    const content = primaryTurn.content;
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    
+    // Extract position (look for recommendation/suggestion patterns)
+    const positionIndicators = [
+      'recommend', 'suggest', 'should', 'propose', 'prefer', 
+      'think', 'believe', 'approach', 'solution', 'implement'
+    ];
+    
+    let position = '';
+    let reasoning = '';
+    
+    // Find position sentences
+    const positionSentences = sentences.filter(sentence => {
+      const lower = sentence.toLowerCase();
+      return positionIndicators.some(indicator => lower.includes(indicator));
+    });
+    
+    if (positionSentences.length > 0) {
+      position = positionSentences[0].trim();
+    } else {
+      // Fallback: use first substantial sentence
+      const substantialSentences = sentences.filter(s => s.trim().length > 20);
+      position = substantialSentences.length > 0 
+        ? substantialSentences[0].trim() 
+        : content.substring(0, 100).trim() + '...';
+    }
+    
+    // Extract reasoning (look for explanation patterns)
+    const reasoningIndicators = [
+      'because', 'since', 'due to', 'given that', 'considering', 
+      'as', 'for', 'this will', 'this ensures', 'this provides'
+    ];
+    
+    const reasoningSentences = sentences.filter(sentence => {
+      const lower = sentence.toLowerCase();
+      return reasoningIndicators.some(indicator => lower.includes(indicator));
+    });
+    
+    if (reasoningSentences.length > 0) {
+      reasoning = reasoningSentences[0].trim();
+    } else {
+      // Fallback: use different section of content
+      if (sentences.length > 1) {
+        reasoning = sentences[Math.min(1, sentences.length - 1)].trim();
+      } else {
+        reasoning = 'Based on discussion context and persona expertise.';
+      }
+    }
+    
+    // Calculate confidence based on content quality
+    let confidence = 75; // Base confidence
+    
+    if (content.length > 200) confidence += 10; // Comprehensive response
+    if (positionSentences.length > 0) confidence += 10; // Clear position
+    if (reasoningSentences.length > 0) confidence += 5; // Clear reasoning
+    
+    confidence = Math.min(95, confidence); // Cap at 95%
+    
+    return {
+      position: position.replace(/^[,\s]+|[,\s]+$/g, ''), // Clean whitespace
+      reasoning: reasoning.replace(/^[,\s]+|[,\s]+$/g, ''), // Clean whitespace
+      confidence,
+    };
   }
 }

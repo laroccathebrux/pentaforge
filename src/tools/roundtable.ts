@@ -8,6 +8,7 @@ import { detectLanguage } from '../lib/i18n.js';
 import { readProjectContext } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
 import { createEnhancedConfig, DynamicRoundConfig } from '../types/consensus.js';
+import { parseResolvedIssuesFile } from '../lib/unresolvedIssuesParser.js';
 import * as path from 'path';
 
 export interface RoundtableInput {
@@ -33,6 +34,10 @@ export interface RoundtableInput {
     conflictTolerance?: number;  // Default: 15
     moderatorEnabled?: boolean;  // Default: true
   };
+  
+  // NEW: Interactive resolution workflow parameters
+  unresolvedIssuesFile?: string;        // Path to resolved UNRESOLVED_ISSUES.md file for final generation
+  unresolvedIssuesThreshold?: number;   // Threshold for unresolved issues before switching to interactive mode (default: 1)
   
   // NEW: Async execution option
   async?: boolean;             // Default: true - run async in background to prevent blocking Claude
@@ -130,6 +135,16 @@ export const runRoundtableTool: Tool = {
           },
         },
       },
+      unresolvedIssuesFile: {
+        type: 'string',
+        description: 'Path to resolved UNRESOLVED_ISSUES.md file for final generation (triggers resolution processing mode)',
+      },
+      unresolvedIssuesThreshold: {
+        type: 'number',
+        description: 'Minimum unresolved issues to trigger interactive mode (default: 1)',
+        minimum: 0,
+        maximum: 50,
+      },
       async: {
         type: 'boolean',
         description: 'Run discussion in background and return immediately (default: true to prevent blocking Claude)',
@@ -205,10 +220,29 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     docsContext,
     dynamicRounds = true, // Default to dynamic rounds for better consensus detection
     consensusConfig,
+    unresolvedIssuesFile,
+    unresolvedIssuesThreshold = 1,
   } = input;
 
   if (!prompt || prompt.trim().length === 0) {
     throw new Error('Prompt is required and cannot be empty');
+  }
+
+  // Check if we're in resolution processing mode
+  if (unresolvedIssuesFile) {
+    log.info('🔄 Resolution processing mode detected - processing user-resolved issues');
+    return executeResolutionProcessing({
+      prompt,
+      unresolvedIssuesFile,
+      outputDir,
+      language,
+      tone,
+      includeAcceptanceCriteria,
+      dryRun,
+      model,
+      claudeMd,
+      docsContext,
+    });
   }
 
   const timestamp = getTimestamp();
@@ -257,6 +291,8 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     timestamp,
     model,
     projectContext,
+    outputDir,
+    unresolvedIssuesThreshold,
   };
   
   const dynamicConfig: Partial<DynamicRoundConfig> | undefined = dynamicRounds ? {
@@ -355,4 +391,195 @@ function generateContextSummary(claudeMd?: string, docsContext?: Array<{path: st
   }
   
   return `Project context includes: ${parts.join(' and ')}`;
+}
+
+/**
+ * Executes resolution processing mode using a resolved UNRESOLVED_ISSUES.md file
+ */
+async function executeResolutionProcessing(params: {
+  prompt: string;
+  unresolvedIssuesFile: string;
+  outputDir: string;
+  language: string;
+  tone: string;
+  includeAcceptanceCriteria: boolean;
+  dryRun: boolean;
+  model?: string;
+  claudeMd?: string;
+  docsContext?: Array<{path: string, content: string}>;
+}): Promise<RoundtableOutput> {
+  const {
+    prompt,
+    unresolvedIssuesFile,
+    outputDir,
+    language,
+    tone,
+    includeAcceptanceCriteria,
+    dryRun,
+    model,
+    claudeMd,
+    docsContext,
+  } = params;
+
+  log.info(`🔍 Processing resolved issues file: ${unresolvedIssuesFile}`);
+  
+  try {
+    // Parse the resolved issues file
+    const resolvedIssuesData = await parseResolvedIssuesFile(unresolvedIssuesFile);
+    
+    log.info(`✅ Parsed ${resolvedIssuesData.issues.length} issues with ${resolvedIssuesData.resolutions.length} resolutions`);
+    
+    // Validate that all issues have been resolved
+    if (resolvedIssuesData.resolutions.length !== resolvedIssuesData.issues.length) {
+      throw new Error(
+        `Resolution incomplete: ${resolvedIssuesData.issues.length} issues found but only ${resolvedIssuesData.resolutions.length} resolutions provided. Please resolve all issues before proceeding.`
+      );
+    }
+    
+    const timestamp = getTimestamp();
+    
+    // Create project context
+    let projectContext;
+    if (claudeMd || docsContext) {
+      projectContext = {
+        claudeMd,
+        docsFiles: docsContext ? docsContext.map(doc => ({
+          path: doc.path,
+          content: doc.content,
+          relativePath: doc.path
+        })) : [],
+        summary: generateContextSummary(claudeMd, docsContext)
+      };
+    } else {
+      projectContext = await readProjectContext(process.cwd());
+    }
+    
+    // Create a mock discussion with resolved consensus
+    const mockDiscussion = createResolvedDiscussion(
+      resolvedIssuesData,
+      {
+        prompt,
+        language,
+        tone,
+        timestamp,
+        model,
+        projectContext,
+        outputDir,
+      }
+    );
+    
+    // Generate the final REQUEST.md with resolved decisions
+    const requestContent = await writeRequestMarkdown(mockDiscussion, {
+      language,
+      timestamp,
+      prompt,
+      includeAcceptanceCriteria,
+    });
+    
+    let requestPath: string | undefined;
+    
+    if (dryRun) {
+      log.info('DRY RUN MODE - Final REQUEST.md:');
+      console.log('\n=== FINAL REQUEST.md ===\n');
+      console.log(requestContent);
+    } else {
+      const resolvedDir = path.resolve(outputDir);
+      await ensureDirectory(resolvedDir);
+      
+      requestPath = path.join(resolvedDir, `REQUEST_${timestamp}.md`);
+      
+      const { writeFileAtomic } = await import('../lib/fs.js');
+      await writeFileAtomic(requestPath, requestContent);
+      
+      log.info(`✅ Final specification written: ${requestPath}`);
+      console.log(`\n✅ Final specification saved: ${path.basename(requestPath)}`);
+    }
+    
+    const isPortuguese = language === 'pt' || language === 'pt-BR';
+    const summary = isPortuguese
+      ? `Especificação final gerada com todas as questões resolvidas: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`
+      : `Final specification generated with all issues resolved: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
+    
+    return {
+      requestPath,
+      summary,
+      timestamp,
+      outputDir: dryRun ? undefined : path.resolve(outputDir),
+    };
+    
+  } catch (error) {
+    log.error(`🚨 Resolution processing failed: ${error}`);
+    throw new Error(`Failed to process resolved issues: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Creates a mock discussion object with resolved consensus from user selections
+ */
+function createResolvedDiscussion(resolvedIssuesData: any, config: any): any {
+  // Create a simplified discussion object with resolved consensus
+  // This bypasses the actual discussion and provides the resolved decisions
+  
+  const participants = [
+    { name: 'Business Analyst', role: 'Business Analyst', objectives: ['Requirements analysis'] },
+    { name: 'Key User', role: 'Key User', objectives: ['User experience'] },
+    { name: 'Product Owner', role: 'Product Owner', objectives: ['Product strategy'] },
+    { name: 'Scrum Master', role: 'Scrum Master', objectives: ['Process management'] },
+    { name: 'Solutions Architect', role: 'Solutions Architect', objectives: ['Technical design'] },
+    { name: 'UX/UI Designer', role: 'UX/UI Designer', objectives: ['User interface'] },
+    { name: 'Support Representative', role: 'Support Representative', objectives: ['Customer support'] },
+    { name: 'Business Stakeholder', role: 'Business Stakeholder', objectives: ['Business value'] },
+  ];
+  
+  // Create mock rounds based on resolved issues
+  const rounds = resolvedIssuesData.issues.map((issue: any, _index: number) => {
+    const resolution = resolvedIssuesData.resolutions.find((r: any) => r.issueId === issue.id);
+    const content = resolution 
+      ? (resolution.selectedOption === 'custom' 
+         ? resolution.customResolution 
+         : `Selected ${resolution.personaName || resolution.selectedOption} approach for ${issue.title}`)
+      : `Resolved: ${issue.title}`;
+      
+    return {
+      round: 1,
+      speaker: 'Resolution Processor',
+      role: 'Resolution Processor',
+      content,
+    };
+  });
+  
+  // Create decisions based on resolutions
+  const decisions = resolvedIssuesData.resolutions.map((resolution: any) => {
+    const issue = resolvedIssuesData.issues.find((i: any) => i.issueId === resolution.issueId);
+    if (resolution.selectedOption === 'custom') {
+      return `${issue?.title || 'Issue'}: ${resolution.customResolution}`;
+    } else if (resolution.selectedOption === 'indifferent') {
+      return `${issue?.title || 'Issue'}: Team to decide based on implementation context`;
+    } else {
+      return `${issue?.title || 'Issue'}: Adopt ${resolution.personaName} approach`;
+    }
+  });
+  
+  const nextSteps = [
+    'Implement resolved technical decisions',
+    'Begin development based on consensus specifications',
+    'Set up regular review cycles to validate implementations'
+  ];
+  
+  return {
+    config,
+    participants,
+    rounds,
+    decisions,
+    nextSteps,
+    consensusHistory: [{
+      agreementScore: 100, // Full agreement after user resolution
+      unresolvedIssues: [], // All issues resolved
+      conflictingPositions: new Map(),
+      confidenceLevel: 95,
+      discussionPhase: 'finalization' as const,
+    }],
+    currentRound: 1,
+    consensusReached: true,
+  };
 }
