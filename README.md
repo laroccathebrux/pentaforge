@@ -38,6 +38,7 @@ The result is two markdown documents ready for use with [PRPs-agentic-eng](https
 - 📈 **Quality Metrics**: Enhanced output with decision evolution and confidence scores
 - ⚡ **Token Optimized**: Progressive summarization keeps usage within 20% of baseline
 - 🔒 **Backward Compatible**: Fixed 3-round mode remains default (opt-in for dynamic)
+- ⚡ **Async Execution**: Non-blocking background processing for long discussions
 
 ## Installation
 
@@ -285,6 +286,7 @@ If you need to call the tool manually with specific parameters:
 - **docsContext** (optional): Array of documentation files from docs/ directory
 - **dynamicRounds** (optional): Enable AI-driven consensus evaluation (default: false)
 - **consensusConfig** (optional): Configure dynamic behavior (thresholds, rounds, etc.)
+- **async** (optional): Run in background and return immediately (default: false)
 
 ## Dynamic Consensus System 🆕
 
@@ -357,6 +359,72 @@ The dynamic system is optimized for efficiency:
 - **Complex topics**: Use more tokens but deliver higher quality
 - **Progressive summarization**: Prevents token explosion in long discussions
 - **Smart termination**: Stops when consensus is reached, not after fixed rounds
+
+## Async Execution 🆕
+
+PentaForge now supports **non-blocking execution** that allows you to continue working while discussions run in the background.
+
+### How It Works
+
+**Synchronous (Default)**:
+- Claude waits for the entire discussion to complete
+- Blocks other operations until finished
+- Returns complete results immediately
+
+**Asynchronous (Opt-in)**:
+- Discussion runs in background process
+- Returns immediately with execution ID
+- Progress updates printed to console
+- Files saved when complete
+
+### Usage Examples
+
+**Async Execution for Long Discussions**:
+```json
+{
+  "prompt": "Design a comprehensive microservices architecture with authentication, logging, monitoring, and deployment pipeline",
+  "dynamicRounds": true,
+  "async": true,
+  "consensusConfig": {
+    "maxRounds": 8,
+    "consensusThreshold": 90
+  }
+}
+```
+
+**Response (Immediate)**:
+```json
+{
+  "summary": "Roundtable discussion started in background (ID: roundtable_2024-01-15T143022Z_a3x9k2m7q). Processing \"Design a comprehensive microservices...\"",
+  "timestamp": "2024-01-15T143022Z",
+  "outputDir": "/path/to/PRPs/inputs",
+  "isAsync": true,
+  "executionId": "roundtable_2024-01-15T143022Z_a3x9k2m7q",
+  "status": "started"
+}
+```
+
+**Background Updates**:
+```
+🎉 Roundtable Discussion Completed (ID: roundtable_2024-01-15T143022Z_a3x9k2m7q)
+📁 Files saved to: /path/to/PRPs/inputs
+   - DISCUSSION_2024-01-15T143022Z.md
+   - REQUEST_2024-01-15T143022Z.md
+```
+
+### When to Use Async Mode
+
+✅ **Ideal for:**
+- Complex topics requiring many rounds (5+ rounds)
+- Dynamic consensus discussions
+- When you need to continue other work
+- Long-running architectural discussions
+
+⏸️ **Use Sync Mode for:**
+- Simple requests (1-3 rounds expected)
+- When you need immediate results
+- Quick proof-of-concept discussions
+- Testing and development
 
 ## Project Context Integration
 

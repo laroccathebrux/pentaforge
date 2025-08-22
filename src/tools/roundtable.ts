@@ -33,6 +33,9 @@ export interface RoundtableInput {
     conflictTolerance?: number;  // Default: 15
     moderatorEnabled?: boolean;  // Default: true
   };
+  
+  // NEW: Async execution option
+  async?: boolean;             // Default: false - run async in background
 }
 
 export interface RoundtableOutput {
@@ -41,6 +44,11 @@ export interface RoundtableOutput {
   summary: string;
   timestamp: string;
   outputDir?: string;
+  
+  // NEW: Async execution tracking
+  isAsync?: boolean;
+  executionId?: string;
+  status?: 'started' | 'running' | 'completed' | 'failed';
 }
 
 export const runRoundtableTool: Tool = {
@@ -122,12 +130,67 @@ export const runRoundtableTool: Tool = {
           },
         },
       },
+      async: {
+        type: 'boolean',
+        description: 'Run discussion in background and return immediately (default: false for synchronous execution)',
+      },
     },
     required: ['prompt'],
   },
 };
 
 export async function executeRoundtable(input: RoundtableInput): Promise<RoundtableOutput> {
+  const {
+    prompt,
+    outputDir = process.env.PENTAFORGE_OUTPUT_DIR || './PRPs/inputs',
+    dryRun = false,
+    async: isAsync = false,
+  } = input;
+
+  if (!prompt || prompt.trim().length === 0) {
+    throw new Error('Prompt is required and cannot be empty');
+  }
+
+  const timestamp = getTimestamp();
+  
+  // If async execution requested, start in background and return immediately
+  if (isAsync) {
+    const executionId = `roundtable_${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    log.info(`🚀 Starting async PentaForge execution (ID: ${executionId})`);
+    
+    // Start background execution (fire and forget)
+    executeRoundtableSync({
+      ...input,
+      async: false // Ensure internal call is synchronous
+    }).then((result) => {
+      log.info(`✅ Async execution completed (ID: ${executionId})`);
+      console.log(`\n🎉 Roundtable Discussion Completed (ID: ${executionId})`);
+      console.log(`📁 Files saved to: ${result.outputDir || outputDir}`);
+      if (result.discussionPath) console.log(`   - ${path.basename(result.discussionPath)}`);
+      if (result.requestPath) console.log(`   - ${path.basename(result.requestPath)}`);
+    }).catch((error) => {
+      log.error(`❌ Async execution failed (ID: ${executionId}): ${error}`);
+      console.log(`\n💥 Roundtable Discussion Failed (ID: ${executionId}): ${error.message}`);
+    });
+    
+    // Return immediately with async status
+    return {
+      summary: `Roundtable discussion started in background (ID: ${executionId}). Processing "${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"`,
+      timestamp,
+      outputDir: dryRun ? undefined : path.resolve(outputDir),
+      isAsync: true,
+      executionId,
+      status: 'started',
+    };
+  }
+
+  // Synchronous execution (original behavior)
+  return executeRoundtableSync(input);
+}
+
+// Separate function for synchronous execution
+export async function executeRoundtableSync(input: RoundtableInput): Promise<RoundtableOutput> {
   log.info('Starting PentaForge roundtable execution');
   
   const {
