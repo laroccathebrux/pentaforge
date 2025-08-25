@@ -79,11 +79,21 @@ Each persona extends `AIPersona` (from `src/personas/aiPersona.ts`) which provid
 - **Token Optimization**: Progressive context summarization prevents token explosion
 
 ### Output Generation
-Two markdown writers in `src/writers/`:
+Three markdown writers in `src/writers/`:
 - `discussionWriter.ts`: Creates full transcript with participant details, decisions, and consensus metrics
-- `requestWriter.ts`: Generates PRP-ready specification with consensus summary and enhanced quality indicators
+- `prdWriter.ts`: **NEW** - Generates industry-standard Product Requirements Documents (PRDs) with comprehensive sections
+- `requestWriter.ts`: Legacy PRP-ready specification format (now secondary to PRD)
 
-Both writers automatically include consensus data when dynamic rounds are used, providing transparency into the decision-making process and agreement levels achieved.
+**PRD Format (Default)**: Industry-standard Product Requirements Document with 7 comprehensive sections:
+1. **Overview/Goal**: Problem statement, objectives, business context
+2. **Scope**: What's included/excluded, constraints, dependencies  
+3. **Functional Requirements**: Detailed requirements with priorities and acceptance criteria
+4. **Non-Functional Requirements**: Performance, security, scalability, usability
+5. **User Journey**: Step-by-step user workflows and interactions
+6. **Acceptance Criteria**: Testable Given-When-Then scenarios
+7. **Stakeholders**: Roles, responsibilities, influence mapping
+
+All writers automatically include consensus data when dynamic rounds are used, providing transparency into the decision-making process and agreement levels achieved.
 
 ### Internationalization
 Auto-detects Portuguese vs English from input prompt. All personas and outputs adapt language accordingly.
@@ -106,6 +116,7 @@ PentaForge supports project context in two ways:
 ### MCP Tool Interface
 The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. It accepts:
 - `prompt` (required): The problem statement
+- `outputFormat`: **NEW** - 'PRD' (default) or 'REQUEST' for legacy format
 - `outputDir`: Where to write files (default: `./PRPs/inputs`)
 - `language`: Output language (auto-detected)
 - `dryRun`: Print to stdout without writing files
@@ -126,10 +137,11 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
 - `unresolvedIssuesFile`: Path to resolved UNRESOLVED_ISSUES.md file for final generation
 - `unresolvedIssuesThreshold`: Threshold for unresolved issues before switching to interactive mode (default: 1)
 
-**Example with Context (Fixed Rounds):**
+**Example with PRD Output (Default):**
 ```json
 {
   "prompt": "Add user authentication to my app",
+  "outputFormat": "PRD",
   "claudeMd": "# My Project\n\nThis is a React app with Express backend...",
   "docsContext": [
     {
@@ -137,6 +149,15 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
       "content": "# API Documentation\n\nEndpoints:\n- GET /api/users..."
     }
   ],
+  "dryRun": true
+}
+```
+
+**Example with Legacy REQUEST Output:**
+```json
+{
+  "prompt": "Add user authentication to my app", 
+  "outputFormat": "REQUEST",
   "dryRun": true
 }
 ```
@@ -167,7 +188,9 @@ The `run_roundtable` tool in `src/tools/roundtable.ts` is the main entry point. 
 
 ### Interactive Issue Resolution Workflow
 
-When discussions conclude with unresolved issues, PentaForge can generate an interactive UNRESOLVED_ISSUES.md file instead of an incomplete REQUEST.md. This workflow allows users to provide input on contested points:
+**IMPORTANT**: PRD generation follows the exact same workflow as the previous REQUEST.md system.
+
+When discussions conclude with unresolved issues, PentaForge generates an interactive UNRESOLVED_ISSUES.md file instead of an incomplete PRD.md (or REQUEST.md). This workflow allows users to provide input on contested points:
 
 **Phase 1: Issue Detection**
 - System detects when `finalConsensus.unresolvedIssues.length >= unresolvedIssuesThreshold`
@@ -180,9 +203,10 @@ When discussions conclude with unresolved issues, PentaForge can generate an int
 - Must resolve all issues before proceeding
 
 **Phase 3: Final Generation**
-- User re-runs PentaForge with `unresolvedIssuesFile` parameter
-- System generates final REQUEST.md using user's resolved preferences
+- User re-runs PentaForge with `unresolvedIssuesFile` parameter  
+- System generates final PRD.md (or REQUEST.md) using user's resolved preferences
 - No additional persona discussion needed
+- **Critical**: PRD is only generated after all issues are resolved, maintaining workflow integrity
 
 **File Format Example:**
 ```markdown
@@ -212,11 +236,13 @@ All file operations use atomic writes through `src/lib/fs.ts` to prevent corrupt
 - Support both Portuguese and English based on original discussion language
 - Custom input validation ensures complete resolution before regeneration
 
-**⚠️ CRITICAL FIX (Latest):**
+**⚠️ CRITICAL WORKFLOW (Latest):**
+- **PRD replaces REQUEST.md as the default output format**
+- PRD follows identical workflow to REQUEST.md: only generates when no unresolved issues remain
 - Fixed consensus routing logic that prevented resolution workflow triggering when unresolved issues were present
-- System now correctly generates UNRESOLVED_ISSUES.md when `finalConsensus.unresolvedIssues.length >= threshold`
+- System correctly generates UNRESOLVED_ISSUES.md when `finalConsensus.unresolvedIssues.length >= threshold`
 - Resolution workflow triggers based on final metrics only, not consensus history
-- Added comprehensive logging for workflow decision transparency
+- **Both PRD and REQUEST formats respect the unresolved issues workflow equally**
 
 ### Docker Considerations
 - Runs as non-root user (UID 1001)
@@ -401,9 +427,13 @@ When using **fallback**: You'll see `🚨`, `🔄`, and `📝` emojis showing ha
 
 ## PRP Integration
 
-The generated `REQUEST.md` includes specific PRP commands at the bottom. These are designed to work with https://github.com/Wirasm/PRPs-agentic-eng workflow:
+**PRD Format (Default)**: Generated PRDs are industry-standard documents that can be used directly with development teams or converted to PRP workflows.
+
+**REQUEST Format (Legacy)**: The generated `REQUEST.md` includes specific PRP commands at the bottom for https://github.com/Wirasm/PRPs-agentic-eng workflow:
 
 1. `/prp-base-create` - Creates base document from REQUEST.md
-2. `/prp-create-planning` - Generates planning from base
+2. `/prp-create-planning` - Generates planning from base  
 3. `/prp-create-tasks` - Creates task breakdown
 4. `/prp-execute-tasks` - Implements the solution
+
+**Migration Note**: PRD format is now the recommended output as it follows industry standards and provides more comprehensive requirements documentation.

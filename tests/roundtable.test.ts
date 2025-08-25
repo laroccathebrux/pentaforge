@@ -29,13 +29,55 @@ describe('Roundtable Execution', () => {
     (fs.rename as jest.Mock).mockResolvedValue(undefined);
   });
 
-  it('should execute roundtable with valid input', async () => {
+  it('should execute roundtable with valid input (async mode)', async () => {
     const input: RoundtableInput = {
       prompt: 'My Todo app loses data on refresh. Need persistence.',
       outputDir: './test-output',
       language: 'en',
       tone: 'professional',
       includeAcceptanceCriteria: true,
+      async: true // Test async mode (default)
+    };
+
+    const result = await executeRoundtable(input);
+
+    expect(result).toBeDefined();
+    expect(result.isAsync).toBe(true);
+    expect(result.executionId).toBeDefined();
+    expect(result.status).toBe('started');
+    expect(result.summary).toContain('Roundtable discussion started in background');
+    expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{6}Z$/);
+  });
+
+  it('should execute roundtable with valid input (sync mode, PRD format)', async () => {
+    const input: RoundtableInput = {
+      prompt: 'My Todo app loses data on refresh. Need persistence.',
+      outputDir: './test-output',
+      language: 'en',
+      tone: 'professional',
+      includeAcceptanceCriteria: true,
+      outputFormat: 'PRD', // Test PRD format
+      async: false // Synchronous for testing
+    };
+
+    const result = await executeRoundtable(input);
+
+    expect(result).toBeDefined();
+    expect(result.summary).toContain('Product Requirements Document');
+    expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{6}Z$/);
+    expect(result.discussionPath).toContain('DISCUSSION_');
+    expect(result.prdPath).toContain('PRD_');
+  });
+
+  it('should execute roundtable with REQUEST format', async () => {
+    const input: RoundtableInput = {
+      prompt: 'My Todo app needs better persistence.',
+      outputDir: './test-output',
+      language: 'en',
+      tone: 'professional',
+      includeAcceptanceCriteria: true,
+      outputFormat: 'REQUEST', // Test legacy format
+      async: false
     };
 
     const result = await executeRoundtable(input);
@@ -45,6 +87,7 @@ describe('Roundtable Execution', () => {
     expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{6}Z$/);
     expect(result.discussionPath).toContain('DISCUSSION_');
     expect(result.requestPath).toContain('REQUEST_');
+    expect(result.prdPath).toBeUndefined(); // No PRD path for REQUEST format
   });
 
   it('should handle dry run mode', async () => {
