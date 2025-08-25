@@ -2,6 +2,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { orchestrateDiscussion } from '../engine/discussion.js';
 import { writeDiscussionMarkdown } from '../writers/discussionWriter.js';
 import { writeRequestMarkdown } from '../writers/requestWriter.js';
+import { PRDWriter } from '../writers/prdWriter.js';
 import { ensureDirectory } from '../lib/fs.js';
 import { getTimestamp } from '../lib/clock.js';
 import { detectLanguage } from '../lib/i18n.js';
@@ -25,6 +26,9 @@ export interface RoundtableInput {
     content: string;
   }>;
   
+  // NEW: Output format selection
+  outputFormat?: 'PRD' | 'REQUEST';    // Default: 'PRD' - generates industry-standard Product Requirements Document
+  
   // NEW: Dynamic rounds configuration
   dynamicRounds?: boolean;         // Default: true - enables adaptive consensus-driven discussions
   consensusConfig?: {
@@ -46,6 +50,7 @@ export interface RoundtableInput {
 export interface RoundtableOutput {
   discussionPath?: string;
   requestPath?: string;
+  prdPath?: string;             // NEW: Path to generated PRD file
   summary: string;
   timestamp: string;
   outputDir?: string;
@@ -61,7 +66,7 @@ export interface RoundtableOutput {
 
 export const runRoundtableTool: Tool = {
   name: 'run_roundtable',
-  description: 'Orchestrate a structured roundtable discussion among 5 expert personas to produce PRP-ready specifications. Supports both fixed 3-round mode and adaptive dynamic rounds with AI-driven consensus evaluation. Optionally provide project context via claudeMd and docsContext parameters for more relevant discussions.',
+  description: 'Orchestrate a structured roundtable discussion among 8 expert personas to generate industry-standard Product Requirements Documents (PRDs) or legacy REQUEST.md files. Supports both fixed 3-round mode and adaptive dynamic rounds with AI-driven consensus evaluation. Optionally provide project context via claudeMd and docsContext parameters for more relevant discussions.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -84,6 +89,11 @@ export const runRoundtableTool: Tool = {
       includeAcceptanceCriteria: {
         type: 'boolean',
         description: 'Include acceptance criteria in REQUEST.md (default: true)',
+      },
+      outputFormat: {
+        type: 'string',
+        enum: ['PRD', 'REQUEST'],
+        description: 'Output format: PRD for industry-standard Product Requirements Document, REQUEST for legacy format (default: PRD)',
       },
       dryRun: {
         type: 'boolean',
@@ -225,6 +235,7 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     model,
     claudeMd,
     docsContext,
+    outputFormat = 'PRD', // Default to PRD format
     dynamicRounds = true, // Default to dynamic rounds for better consensus detection
     consensusConfig,
     unresolvedIssuesFile,
@@ -325,19 +336,36 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     prompt,
   });
 
-  // Only generate REQUEST.md if no user resolution is required
+  // Generate output document based on format (PRD or REQUEST) if no user resolution is required
   let requestContent: string | undefined;
+  let prdResult: any | undefined;
+  
   if (!requiresUserResolution) {
-    requestContent = await writeRequestMarkdown(discussion, {
-      language,
-      timestamp,
-      prompt,
-      includeAcceptanceCriteria,
-    });
+    if (outputFormat === 'PRD') {
+      // Generate PRD using PRDWriter
+      const prdWriter = new PRDWriter(language as any);
+      prdResult = await prdWriter.writePRD(discussion, {
+        language,
+        timestamp,
+        prompt,
+        outputDir,
+        dryRun: true // We'll handle file writing manually
+      });
+      requestContent = 'PRD_GENERATED'; // Placeholder for logic consistency
+    } else {
+      // Generate legacy REQUEST.md
+      requestContent = await writeRequestMarkdown(discussion, {
+        language,
+        timestamp,
+        prompt,
+        includeAcceptanceCriteria,
+      });
+    }
   }
 
   let discussionPath: string | undefined;
   let requestPath: string | undefined;
+  let prdPath: string | undefined;
 
   if (dryRun) {
     log.info('DRY RUN MODE - Outputs:');
@@ -345,12 +373,22 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     console.log(discussionContent);
     
     if (requiresUserResolution) {
-      console.log('\n⚠️  REQUEST.md NOT GENERATED - User resolution required');
+      const outputFileName = outputFormat === 'PRD' ? 'PRD.md' : 'REQUEST.md';
+      console.log(`\n⚠️  ${outputFileName} NOT GENERATED - User resolution required`);
       console.log(`📝 Please resolve issues in: ${resolutionFilePath}`);
       console.log('🔄 Re-run PentaForge with unresolvedIssuesFile parameter after resolution');
     } else {
-      console.log('\n=== REQUEST.md ===\n');
-      console.log(requestContent);
+      const outputFileName = outputFormat === 'PRD' ? 'PRD.md' : 'REQUEST.md';
+      console.log(`\n=== ${outputFileName} ===\n`);
+      
+      if (outputFormat === 'PRD' && prdResult) {
+        // Generate formatted PRD content from the result
+        const prdWriter = new PRDWriter(language as any);
+        const formattedContent = await (prdWriter as any).formatPRDContent(prdResult.prdDocument);
+        console.log(formattedContent);
+      } else {
+        console.log(requestContent);
+      }
     }
   } else {
     const resolvedDir = path.resolve(outputDir);
@@ -368,7 +406,8 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     const filesWritten = [discussionPath];
 
     if (requiresUserResolution) {
-      log.info(`⚠️  REQUEST.md NOT generated - User resolution required`);
+      const outputFileName = outputFormat === 'PRD' ? 'PRD.md' : 'REQUEST.md';
+      log.info(`⚠️  ${outputFileName} NOT generated - User resolution required`);
       log.info(`📝 Please resolve issues in: ${resolutionFilePath}`);
       log.info(`🔄 Re-run PentaForge with unresolvedIssuesFile parameter after resolution`);
       
@@ -378,12 +417,34 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
       console.log(`📝 Please resolve issues in: ${resolutionFilePath}`);
       console.log(`🔄 Re-run with: unresolvedIssuesFile parameter`);
     } else {
-      requestPath = path.join(resolvedDir, `REQUEST_${timestamp}.md`);
-      log.info(`📄 Writing REQUEST file: ${requestPath}`);
-      await writeFileAtomic(requestPath, requestContent!);
-      
-      filesSaved.push(`REQUEST_${timestamp}.md`);
-      filesWritten.push(requestPath);
+      if (outputFormat === 'PRD') {
+        // Generate PRD file
+        const prdWriter = new PRDWriter(language as any);
+        const result = await prdWriter.writePRD(discussion, {
+          language,
+          timestamp,
+          prompt,
+          outputDir: resolvedDir,
+          dryRun: false
+        });
+        
+        prdPath = result.filePath;
+        requestPath = result.filePath; // For backward compatibility
+        
+        filesSaved.push(`PRD_${timestamp}.md`);
+        filesWritten.push(result.filePath);
+        
+        log.info(`📄 PRD file written: ${result.filePath}`);
+        log.info(`✅ PRD generation completed with ${result.validationResult.completeness}% completeness`);
+      } else {
+        // Generate legacy REQUEST.md file
+        requestPath = path.join(resolvedDir, `REQUEST_${timestamp}.md`);
+        log.info(`📄 Writing REQUEST file: ${requestPath}`);
+        await writeFileAtomic(requestPath, requestContent!);
+        
+        filesSaved.push(`REQUEST_${timestamp}.md`);
+        filesWritten.push(requestPath);
+      }
 
       log.info(`✅ Files successfully written:`);
       filesWritten.forEach(file => log.info(`   - ${file}`));
@@ -395,14 +456,21 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
 
   let summary: string;
   if (requiresUserResolution) {
-    summary = `Roundtable discussion completed but requires user resolution. ${language === 'pt' ? 'Resolva as questões em UNRESOLVED_ISSUES.md antes de gerar a especificação final' : 'Please resolve issues in UNRESOLVED_ISSUES.md before generating final specification'}: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
+    const outputType = outputFormat === 'PRD' ? 
+      (language === 'pt' ? 'PRD' : 'Product Requirements Document') :
+      (language === 'pt' ? 'especificação' : 'specification');
+    summary = `Roundtable discussion completed but requires user resolution. ${language === 'pt' ? 'Resolva as questões em UNRESOLVED_ISSUES.md antes de gerar o ' + outputType + ' final' : 'Please resolve issues in UNRESOLVED_ISSUES.md before generating final ' + outputType}: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
   } else {
-    summary = `Roundtable completed. Generated ${language === 'pt' ? 'especificação PRP-ready' : 'PRP-ready specification'} for: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
+    const outputType = outputFormat === 'PRD' ? 
+      (language === 'pt' ? 'Documento de Requisitos do Produto (PRD)' : 'Product Requirements Document (PRD)') :
+      (language === 'pt' ? 'especificação PRP-ready' : 'PRP-ready specification');
+    summary = `Roundtable completed. Generated ${outputType} for: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"`;
   }
 
   return {
     discussionPath,
     requestPath: requiresUserResolution ? undefined : requestPath,
+    prdPath: outputFormat === 'PRD' && !requiresUserResolution ? prdPath : undefined,
     summary,
     timestamp,
     outputDir: dryRun ? undefined : path.resolve(outputDir),
