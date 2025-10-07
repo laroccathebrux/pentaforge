@@ -25,6 +25,9 @@ export async function writeDiscussionMarkdown(
   lines.push(`**${isPortuguese ? 'Idioma' : 'Language'}:** ${language}`);
   lines.push('');
 
+  // Executive Summary (new section before participants)
+  lines.push(...await generateExecutiveSummary(discussion, isPortuguese));
+
   // Participants
   lines.push(`## ${isPortuguese ? 'Participantes' : 'Participants'}`);
   lines.push('');
@@ -196,7 +199,329 @@ function translatePhase(phase: ConsensusMetrics['discussionPhase'], isPortuguese
       default: return phase;
     }
   }
-  
+
   // English - just capitalize first letter
   return phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+
+/**
+ * Generates executive summary section with decisions and alternatives
+ */
+async function generateExecutiveSummary(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): Promise<string[]> {
+  const lines: string[] = [];
+
+  // Section header
+  lines.push(`## ${isPortuguese ? 'Resumo Executivo' : 'Executive Summary'}`);
+  lines.push('');
+
+  // Extract key decisions and alternatives from discussion
+  const analysis = analyzeDiscussionDecisions(discussion, isPortuguese);
+
+  // Overview
+  lines.push(`### ${isPortuguese ? 'Visão Geral' : 'Overview'}`);
+  lines.push('');
+  lines.push(analysis.overview);
+  lines.push('');
+
+  // Key decisions with alternatives
+  if (analysis.decisions.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Decisões Tomadas e Alternativas Consideradas' : 'Decisions Made and Alternatives Considered'}`);
+    lines.push('');
+
+    analysis.decisions.forEach((decision, index) => {
+      lines.push(`#### ${index + 1}. ${decision.topic}`);
+      lines.push('');
+
+      // Final decision
+      lines.push(`**${isPortuguese ? 'Decisão Final' : 'Final Decision'}:** ${decision.finalChoice}`);
+      lines.push('');
+
+      // Rationale
+      if (decision.rationale) {
+        lines.push(`**${isPortuguese ? 'Justificativa' : 'Rationale'}:** ${decision.rationale}`);
+        lines.push('');
+      }
+
+      // Alternatives considered
+      if (decision.alternatives.length > 0) {
+        lines.push(`**${isPortuguese ? 'Alternativas Consideradas e Descartadas' : 'Alternatives Considered and Discarded'}:**`);
+        decision.alternatives.forEach(alt => {
+          lines.push(`- **${alt.option}**: ${alt.reason}`);
+        });
+        lines.push('');
+      }
+    });
+  }
+
+  // Discarded options
+  if (analysis.discarded.length > 0) {
+    lines.push(`### ${isPortuguese ? 'Opções Descartadas Durante a Discussão' : 'Options Discarded During Discussion'}`);
+    lines.push('');
+
+    analysis.discarded.forEach(item => {
+      lines.push(`- **${item.option}**: ${item.reason}`);
+    });
+    lines.push('');
+  }
+
+  return lines;
+}
+
+/**
+ * Analyzes discussion rounds to extract decisions, alternatives, and rationale
+ */
+function analyzeDiscussionDecisions(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): {
+  overview: string;
+  decisions: Array<{
+    topic: string;
+    finalChoice: string;
+    rationale: string;
+    alternatives: Array<{ option: string; reason: string }>;
+  }>;
+  discarded: Array<{ option: string; reason: string }>;
+} {
+  const rounds = discussion.rounds;
+
+  // Extract technology/approach mentions and their evolution
+  const mentions = extractTechnologyMentions(rounds);
+  const decisions = buildDecisionTree(mentions, discussion.decisions, isPortuguese);
+  const discarded = extractDiscardedOptions(rounds, decisions, isPortuguese);
+
+  // Generate overview
+  const overview = generateOverview(discussion, isPortuguese);
+
+  return {
+    overview,
+    decisions,
+    discarded
+  };
+}
+
+/**
+ * Extracts mentions of technologies, approaches, and alternatives from discussion
+ */
+function extractTechnologyMentions(rounds: any[]): Map<string, Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>> {
+  const mentions = new Map<string, Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>>();
+
+  // Keywords that indicate technology/approach mentions
+  const techIndicators = [
+    'kafka', 'rabbitmq', 'redis', 'postgresql', 'mysql', 'mongodb', 'dynamodb',
+    'react', 'vue', 'angular', 'nextjs', 'express', 'fastapi', 'spring',
+    'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'microservices', 'monolith',
+    'rest', 'graphql', 'grpc', 'oauth', 'jwt', 'saml', 'websocket',
+    'typescript', 'javascript', 'python', 'java', 'go', 'rust'
+  ];
+
+  rounds.forEach(turn => {
+    const content = turn.content.toLowerCase();
+
+    techIndicators.forEach(tech => {
+      if (content.includes(tech)) {
+        // Determine sentiment
+        let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
+
+        const positiveWords = ['recommend', 'suggest', 'prefer', 'better', 'ideal', 'advantage', 'benefit', 'recomendo', 'sugiro', 'prefiro', 'melhor', 'ideal', 'vantagem', 'benefício'];
+        const negativeWords = ['avoid', 'problem', 'issue', 'concern', 'drawback', 'limitation', 'evitar', 'problema', 'questão', 'preocupação', 'desvantagem', 'limitação'];
+
+        if (positiveWords.some(word => content.includes(word))) {
+          sentiment = 'positive';
+        } else if (negativeWords.some(word => content.includes(word))) {
+          sentiment = 'negative';
+        }
+
+        if (!mentions.has(tech)) {
+          mentions.set(tech, []);
+        }
+
+        mentions.get(tech)!.push({
+          speaker: turn.role,
+          content: turn.content,
+          round: turn.round,
+          sentiment
+        });
+      }
+    });
+  });
+
+  return mentions;
+}
+
+/**
+ * Builds decision tree from mentions and final decisions
+ */
+function buildDecisionTree(
+  mentions: Map<string, Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>>,
+  finalDecisions: string[],
+  isPortuguese: boolean
+): Array<{
+  topic: string;
+  finalChoice: string;
+  rationale: string;
+  alternatives: Array<{ option: string; reason: string }>;
+}> {
+  const decisions: Array<{
+    topic: string;
+    finalChoice: string;
+    rationale: string;
+    alternatives: Array<{ option: string; reason: string }>;
+  }> = [];
+
+  // Group related technologies (e.g., Kafka vs RabbitMQ)
+  const groups = groupRelatedTechnologies(mentions);
+
+  groups.forEach(group => {
+    // Find which one was chosen (appears in final decisions with positive sentiment)
+    const chosen = group.technologies.find(tech => {
+      const techMentions = mentions.get(tech) || [];
+      const hasPositive = techMentions.some(m => m.sentiment === 'positive');
+      const inDecisions = finalDecisions.some(d => d.toLowerCase().includes(tech));
+      return hasPositive && inDecisions;
+    });
+
+    if (chosen) {
+      const chosenMentions = mentions.get(chosen) || [];
+      const rationale = extractRationale(chosenMentions, isPortuguese);
+
+      const alternatives = group.technologies
+        .filter(tech => tech !== chosen)
+        .map(tech => {
+          const techMentions = mentions.get(tech) || [];
+          const reason = extractDiscardReason(techMentions, isPortuguese);
+          return { option: tech.toUpperCase(), reason };
+        })
+        .filter(alt => alt.reason.length > 0);
+
+      decisions.push({
+        topic: group.category,
+        finalChoice: chosen.toUpperCase(),
+        rationale,
+        alternatives
+      });
+    }
+  });
+
+  return decisions;
+}
+
+/**
+ * Groups related technologies by category
+ */
+function groupRelatedTechnologies(mentions: Map<string, any[]>): Array<{ category: string; technologies: string[] }> {
+  const groups: Array<{ category: string; technologies: string[] }> = [];
+
+  const categories = {
+    'Message Broker': ['kafka', 'rabbitmq'],
+    'Database': ['postgresql', 'mysql', 'mongodb', 'dynamodb', 'redis'],
+    'Frontend Framework': ['react', 'vue', 'angular', 'nextjs'],
+    'Backend Framework': ['express', 'fastapi', 'spring'],
+    'Authentication': ['oauth', 'jwt', 'saml'],
+    'API Protocol': ['rest', 'graphql', 'grpc'],
+    'Programming Language': ['typescript', 'javascript', 'python', 'java', 'go', 'rust'],
+    'Infrastructure': ['docker', 'kubernetes'],
+    'Cloud Provider': ['aws', 'azure', 'gcp'],
+    'Architecture': ['microservices', 'monolith']
+  };
+
+  Object.entries(categories).forEach(([category, techs]) => {
+    const foundTechs = techs.filter(tech => mentions.has(tech));
+    if (foundTechs.length > 0) {
+      groups.push({ category, technologies: foundTechs });
+    }
+  });
+
+  return groups;
+}
+
+/**
+ * Extracts rationale for chosen technology
+ */
+function extractRationale(mentions: Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>, isPortuguese: boolean): string {
+  const positiveMentions = mentions.filter(m => m.sentiment === 'positive');
+
+  if (positiveMentions.length === 0) {
+    return isPortuguese ? 'Consenso da equipe' : 'Team consensus';
+  }
+
+  // Extract sentences with reasoning
+  const reasoningIndicators = isPortuguese
+    ? ['porque', 'devido', 'uma vez que', 'considerando', 'já que', 'vantagem', 'benefício', 'permite', 'garante']
+    : ['because', 'since', 'due to', 'given that', 'considering', 'advantage', 'benefit', 'allows', 'ensures'];
+
+  const rationales: string[] = [];
+
+  positiveMentions.forEach(mention => {
+    const sentences = mention.content.split(/[.!?]+/);
+    sentences.forEach(sentence => {
+      if (reasoningIndicators.some(indicator => sentence.toLowerCase().includes(indicator))) {
+        rationales.push(sentence.trim());
+      }
+    });
+  });
+
+  return rationales.length > 0
+    ? rationales[0]
+    : (isPortuguese ? 'Recomendado pela equipe técnica' : 'Recommended by technical team');
+}
+
+/**
+ * Extracts reason for discarding alternative
+ */
+function extractDiscardReason(mentions: Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>, isPortuguese: boolean): string {
+  const negativeMentions = mentions.filter(m => m.sentiment === 'negative');
+
+  if (negativeMentions.length === 0) {
+    return '';
+  }
+
+  const reasoningIndicators = isPortuguese
+    ? ['problema', 'limitação', 'desvantagem', 'complexidade', 'custo', 'dificulta', 'não atende']
+    : ['problem', 'limitation', 'drawback', 'complexity', 'cost', 'difficult', 'does not meet'];
+
+  const reasons: string[] = [];
+
+  negativeMentions.forEach(mention => {
+    const sentences = mention.content.split(/[.!?]+/);
+    sentences.forEach(sentence => {
+      if (reasoningIndicators.some(indicator => sentence.toLowerCase().includes(indicator))) {
+        reasons.push(sentence.trim());
+      }
+    });
+  });
+
+  return reasons.length > 0
+    ? reasons[0]
+    : (isPortuguese ? 'Não atende aos requisitos' : 'Does not meet requirements');
+}
+
+/**
+ * Extracts discarded options from discussion
+ */
+function extractDiscardedOptions(
+  _rounds: any[],
+  decisions: Array<{ topic: string; finalChoice: string; alternatives: Array<{ option: string; reason: string }> }>,
+  _isPortuguese: boolean
+): Array<{ option: string; reason: string }> {
+  const discarded: Array<{ option: string; reason: string }> = [];
+
+  // Collect all alternatives already captured in decisions
+  decisions.forEach(decision => {
+    discarded.push(...decision.alternatives);
+  });
+
+  return discarded;
+}
+
+/**
+ * Generates overview of discussion
+ */
+function generateOverview(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): string {
+  const totalRounds = discussion.rounds.length > 0 ? Math.max(...discussion.rounds.map(r => r.round)) : 0;
+  const participantCount = discussion.participants.length;
+  const decisionCount = discussion.decisions.length;
+
+  if (isPortuguese) {
+    return `A discussão envolveu ${participantCount} participantes ao longo de ${totalRounds} rodadas, resultando em ${decisionCount} decisões principais. A equipe analisou diferentes alternativas técnicas e de negócio para cada aspecto do projeto, considerando trade-offs entre complexidade, custo, performance e manutenibilidade.`;
+  }
+
+  return `The discussion involved ${participantCount} participants across ${totalRounds} rounds, resulting in ${decisionCount} key decisions. The team analyzed different technical and business alternatives for each aspect of the project, considering trade-offs between complexity, cost, performance, and maintainability.`;
 }
