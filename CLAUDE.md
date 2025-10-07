@@ -264,12 +264,18 @@ All file operations use atomic writes through `src/lib/fs.ts` to prevent corrupt
 
 ### Docker Considerations
 - Runs as non-root user (UID 1001)
-- Default output directory: `/app/PRPs/inputs`
-- Volume mapping required for persistence
+- Default output directory: `/app/PRPs/inputs` (auto-detected in Docker)
+- Volume mapping required for file persistence to host
 - Uses stdio, no ports exposed
 - **Automatic Docker networking**: Detects containerized environment and uses `host.docker.internal:11434` for Ollama
+- **Docker-aware path resolution**: Automatically uses `/app/PRPs/inputs` in container, `./PRPs/inputs` locally
 - Falls back to hardcoded responses if AI service unavailable
 - For MCP clients like Claude Code, networking is automatically handled
+
+**Important**: To persist files to your local machine when running in Docker, mount a volume:
+```bash
+docker run -v $(pwd)/PRPs/inputs:/app/PRPs/inputs -i --rm pentaforge:latest
+```
 
 ## AI Configuration
 

@@ -10,6 +10,7 @@ import { readProjectContext } from '../lib/contextReader.js';
 import { log } from '../lib/log.js';
 import { createEnhancedConfig, DynamicRoundConfig } from '../types/consensus.js';
 import { parseResolvedIssuesFile } from '../lib/unresolvedIssuesParser.js';
+import { existsSync } from 'fs';
 import * as path from 'path';
 
 export interface RoundtableInput {
@@ -224,10 +225,30 @@ export async function executeRoundtable(input: RoundtableInput): Promise<Roundta
 // Separate function for synchronous execution
 export async function executeRoundtableSync(input: RoundtableInput): Promise<RoundtableOutput> {
   log.info('Starting PentaForge roundtable execution');
-  
+
+  // Determine output directory with proper defaults
+  // Priority: 1. Explicit input, 2. Environment variable, 3. Docker-aware default
+  const getDefaultOutputDir = (): string => {
+    if (process.env.PENTAFORGE_OUTPUT_DIR) {
+      return process.env.PENTAFORGE_OUTPUT_DIR;
+    }
+    // Check if we're in Docker container
+    const isDocker = process.env.DOCKER_CONTAINER ||
+                     process.env.container ||
+                     existsSync('/.dockerenv');
+
+    if (isDocker) {
+      // In Docker, use absolute path that exists in container
+      return '/app/PRPs/inputs';
+    } else {
+      // Local development/execution, use relative path
+      return './PRPs/inputs';
+    }
+  };
+
   const {
     prompt,
-    outputDir = process.env.PENTAFORGE_OUTPUT_DIR || './PRPs/inputs',
+    outputDir = getDefaultOutputDir(),
     language = detectLanguage(prompt),
     tone = 'professional',
     includeAcceptanceCriteria = true,
@@ -241,6 +262,12 @@ export async function executeRoundtableSync(input: RoundtableInput): Promise<Rou
     unresolvedIssuesFile,
     unresolvedIssuesThreshold = 1,
   } = input;
+
+  // Log the output directory being used
+  const isDocker = process.env.DOCKER_CONTAINER || process.env.container || existsSync('/.dockerenv');
+  log.info(`📁 Environment: ${isDocker ? 'Docker container' : 'Local'}`);
+  log.info(`📁 Output directory: ${outputDir} ${outputDir.startsWith('/') ? '(absolute)' : '(relative)'}`);
+  log.info(`📁 Resolved path will be: ${path.resolve(outputDir)}`);
 
   if (!prompt || prompt.trim().length === 0) {
     throw new Error('Prompt is required and cannot be empty');
