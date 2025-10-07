@@ -67,6 +67,16 @@ Eight expert personas simulate a comprehensive product team meeting:
 
 Each persona extends `AIPersona` (from `src/personas/aiPersona.ts`) which provides AI-powered responses using configurable LLM providers. When AI fails, personas automatically fallback to hardcoded responses ensuring system reliability.
 
+**Enhanced Prompt Engineering (v2.0)**: Each persona now includes detailed, structured instructions that guide the AI to:
+- Analyze SPECIFIC requirements (not generic best practices)
+- Reference CONCRETE details from the prompt and project context
+- Provide QUANTIFIED metrics and measurable outcomes
+- Use structured analysis frameworks (6-point checklists for each role)
+- Avoid generic statements and focus on actionable, specific recommendations
+- Build on previous discussion contributions with concrete additions
+
+This enhancement significantly improves discussion relevance by ensuring each persona provides contextual, data-driven insights rather than generic advice.
+
 ### Discussion Engine
 `src/engine/discussion.ts` orchestrates discussions using either fixed 3-round mode (default) or dynamic consensus-driven rounds. The system supports two modes:
 
@@ -378,6 +388,35 @@ Test dry run mode to see outputs without file writes:
 
 When AI is **working**: You'll see `🤖`, `✅`, and `⚡` emojis showing successful AI responses.
 When using **fallback**: You'll see `🚨`, `🔄`, and `📝` emojis showing hardcoded responses are being used.
+
+## Recent Improvements
+
+### v2.0 - Enhanced Persona Relevance (Latest)
+**Problem**: Discussions were generating generic, non-specific responses that didn't address the actual requirements.
+
+**Solution**: Completely restructured persona prompts with:
+1. **Critical Instructions Section**: Explicit guidance to avoid generic statements
+2. **Structured Analysis Frameworks**: 6-point checklists specific to each role
+3. **Concrete Examples**: "AVOID this / PREFER that" patterns for each persona
+4. **Quantification Requirements**: Force personas to provide numbers, metrics, and measurable outcomes
+5. **Context Integration**: Instructions to reference project context and specific technologies mentioned
+
+**Impact**: Personas now provide:
+- Specific technical recommendations instead of "use best practices"
+- Quantified metrics instead of vague statements
+- Concrete examples relevant to the prompt
+- Analysis that builds on previous discussion points
+
+**Files Modified**:
+- `src/personas/aiPersona.ts`: Enhanced base system prompt with relevance instructions
+- `src/personas/BusinessAnalyst.ts`: Added functional/non-functional requirements framework
+- `src/personas/SolutionsArchitect.ts`: Added architecture and tech stack analysis framework
+- `src/personas/ProductOwner.ts`: Added value proposition and ROI framework
+- `src/personas/KeyUser.ts`: Added pain points and user workflow framework
+- `src/personas/UXUIDesigner.ts`: Added UI components and interaction framework
+- `src/personas/ScrumMaster.ts`: Added delivery planning and risk framework
+- `src/personas/BusinessStakeholder.ts`: Added business analysis and ROI framework
+- `src/personas/SupportRepresentative.ts`: Added support impact analysis framework
 
 ## Troubleshooting
 

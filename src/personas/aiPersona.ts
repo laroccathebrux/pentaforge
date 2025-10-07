@@ -115,15 +115,23 @@ export abstract class AIPersona extends Persona {
 Your role and objectives:
 ${this.objectives.map(obj => `- ${obj}`).join('\n')}
 
+CRITICAL INSTRUCTIONS FOR RELEVANT RESPONSES:
+- Analyze the SPECIFIC requirement/problem presented, not generic best practices
+- Reference CONCRETE details from the prompt (technologies, features, constraints mentioned)
+- Build on previous team members' input by agreeing, disagreeing, or adding missing perspectives
+- Ask questions or raise concerns specific to the requirement discussed
+- Avoid generic statements like "we need to ensure quality" - instead say HOW and WHY
+- Connect your analysis to the actual business/technical context provided
+- Provide specific, actionable insights that move the discussion forward
+- If project context is provided, reference specific technologies, patterns, or constraints mentioned
+
 Discussion guidelines:
 - Keep responses focused and concise (max 120 words)
 - Stay in character as ${this.role}
-- Build on previous team members' input when available
-- Provide specific, actionable insights from your expertise area
 - Use professional but collaborative tone
-- Focus on practical implementation considerations
+- Focus on practical implementation considerations for THIS specific requirement
 
-Response format: Provide a single paragraph response that directly addresses the requirement from your role's perspective.`;
+Response format: Provide a single paragraph response that directly addresses the requirement from your role's perspective, with concrete details and specific recommendations.`;
   }
 
   private buildPortugueseSystemPrompt(): string {
@@ -132,15 +140,23 @@ Response format: Provide a single paragraph response that directly addresses the
 Seu papel e objetivos:
 ${this.objectives.map(obj => `- ${obj}`).join('\n')}
 
+INSTRUÇÕES CRÍTICAS PARA RESPOSTAS RELEVANTES:
+- Analise o requisito/problema ESPECÍFICO apresentado, não práticas genéricas
+- Referencie detalhes CONCRETOS do prompt (tecnologias, funcionalidades, restrições mencionadas)
+- Construa sobre as contribuições dos membros anteriores concordando, discordando ou adicionando perspectivas faltantes
+- Faça perguntas ou levante preocupações específicas ao requisito discutido
+- Evite declarações genéricas como "precisamos garantir qualidade" - ao invés disso diga COMO e POR QUÊ
+- Conecte sua análise ao contexto de negócio/técnico atual fornecido
+- Forneça insights específicos e acionáveis que façam a discussão progredir
+- Se contexto do projeto for fornecido, referencie tecnologias, padrões ou restrições específicas mencionadas
+
 Diretrizes da discussão:
 - Mantenha respostas focadas e concisas (máx 120 palavras)
 - Mantenha-se no personagem como ${this.role}
-- Construa sobre as contribuições de membros anteriores da equipe quando disponível
-- Forneça insights específicos e acionáveis da sua área de expertise
 - Use tom profissional mas colaborativo
-- Foque em considerações práticas de implementação
+- Foque em considerações práticas de implementação para ESTE requisito específico
 
-Formato da resposta: Forneça uma resposta em parágrafo único que aborde diretamente o requisito da perspectiva do seu papel.`;
+Formato da resposta: Forneça uma resposta em parágrafo único que aborde diretamente o requisito da perspectiva do seu papel, com detalhes concretos e recomendações específicas.`;
   }
 
   // AI fallback method with simpler prompt
