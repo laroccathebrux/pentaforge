@@ -186,24 +186,25 @@ function hasSemanticSimilarity(content: string, issue: string): boolean {
 function extractPositionFromTurn(content: string, _issueDescription: string, isPortuguese: boolean): string {
   // Try to find sentences that express a position or recommendation
   const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
-  
+
   // Look for position indicators
   const positionIndicators = isPortuguese
     ? ['recomendo', 'sugiro', 'devemos', 'deveríamos', 'prefiro', 'acho que', 'acredito que', 'proposta']
     : ['recommend', 'suggest', 'should', 'propose', 'prefer', 'think', 'believe', 'approach'];
-  
+
   const positionSentences = sentences.filter(sentence => {
     const lower = sentence.toLowerCase();
     return positionIndicators.some(indicator => lower.includes(indicator));
   });
-  
+
   if (positionSentences.length > 0) {
-    return positionSentences[0].trim();
+    // Return ALL position sentences, not just the first one
+    return positionSentences.join('. ').trim();
   }
-  
-  // Fallback: use first substantial sentence
-  const substantialSentences = sentences.filter(s => s.trim().length > 30);
-  return substantialSentences.length > 0 ? substantialSentences[0].trim() : content.substring(0, 100).trim() + '...';
+
+  // Fallback: return full content without truncation
+  // Remove any extra whitespace but keep the complete text
+  return content.trim();
 }
 
 /**
@@ -214,27 +215,22 @@ function extractReasoningFromTurn(content: string, isPortuguese: boolean): strin
   const reasoningIndicators = isPortuguese
     ? ['porque', 'devido', 'uma vez que', 'considerando', 'já que', 'visto que', 'pois']
     : ['because', 'since', 'due to', 'given that', 'considering', 'as', 'for'];
-  
+
   const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
-  
+
   const reasoningSentences = sentences.filter(sentence => {
     const lower = sentence.toLowerCase();
     return reasoningIndicators.some(indicator => lower.includes(indicator));
   });
-  
+
   if (reasoningSentences.length > 0) {
-    return reasoningSentences[0].trim();
+    // Return ALL reasoning sentences, not just the first one
+    return reasoningSentences.join('. ').trim();
   }
-  
-  // Fallback: use a middle section of the content that might contain reasoning
-  const words = content.split(/\s+/);
-  if (words.length > 20) {
-    const middleStart = Math.floor(words.length * 0.3);
-    const middleEnd = Math.floor(words.length * 0.7);
-    return words.slice(middleStart, middleEnd).join(' ').trim() + '...';
-  }
-  
-  return content.substring(0, 80).trim() + '...';
+
+  // Fallback: return full content without truncation
+  // This ensures we don't lose any important context
+  return content.trim();
 }
 
 /**
