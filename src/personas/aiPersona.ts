@@ -81,12 +81,12 @@ export abstract class AIPersona extends Persona {
       const discussionHistory = previousTurns
         .map(turn => `${turn.role}: ${turn.content}`)
         .join('\n\n');
-      
+
       messages.push({
         role: 'user',
         content: isPortuguese
-          ? `Contexto da discussão anterior:\n${discussionHistory}\n\nBaseado nisso, forneça sua perspectiva como ${this.role}:`
-          : `Previous discussion context:\n${discussionHistory}\n\nBased on this, provide your perspective as ${this.role}:`,
+          ? `Contexto da discussão anterior:\n${discussionHistory}\n\n**OBJETIVO: BUSCAR CONSENSO**\n\nRevise as contribuições acima e, como ${this.role}:\n- CONCORDE com pontos válidos de outros participantes (cite-os explicitamente)\n- CONSTRUA sobre ideias já apresentadas ao invés de repetir ou contradizer sem justificativa\n- IDENTIFIQUE áreas de alinhamento e enfatize-as\n- Se discordar, PROPONHA alternativas construtivas que conciliem diferentes perspectivas\n- FOCALIZE em convergir para uma solução viável que atenda aos objetivos comuns\n\nSua resposta deve demonstrar progresso em direção ao consenso:`
+          : `Previous discussion context:\n${discussionHistory}\n\n**GOAL: SEEK CONSENSUS**\n\nReview the contributions above and, as ${this.role}:\n- AGREE with valid points from other participants (cite them explicitly)\n- BUILD on ideas already presented instead of repeating or contradicting without justification\n- IDENTIFY areas of alignment and emphasize them\n- If you disagree, PROPOSE constructive alternatives that reconcile different perspectives\n- FOCUS on converging toward a viable solution that meets common objectives\n\nYour response should demonstrate progress toward consensus:`,
       });
     } else {
       messages.push({
@@ -125,11 +125,21 @@ CRITICAL INSTRUCTIONS FOR RELEVANT RESPONSES:
 - Provide specific, actionable insights that move the discussion forward
 - If project context is provided, reference specific technologies, patterns, or constraints mentioned
 
+CONSENSUS-BUILDING INSTRUCTIONS:
+- **PRIMARY GOAL**: Work toward team consensus and alignment
+- **AGREE FIRST**: Start by acknowledging valid points from other participants before adding your perspective
+- **CONVERGE**: Look for common ground and areas of agreement, then build on them
+- **CITE**: Reference specific proposals from other roles when agreeing or building upon them
+- **COMPROMISE**: If you have concerns, propose constructive alternatives that incorporate others' ideas
+- **AVOID REPETITION**: Don't repeat what others said unless you're explicitly agreeing or refining it
+- **SIGNAL AGREEMENT**: Use phrases like "I agree with [Role]'s approach..." or "Building on [Role]'s suggestion..."
+
 Discussion guidelines:
 - Keep responses focused and concise (max 120 words)
 - Stay in character as ${this.role}
 - Use professional but collaborative tone
 - Focus on practical implementation considerations for THIS specific requirement
+- **Demonstrate consensus-building in every response after round 1**
 
 Response format: Provide a single paragraph response that directly addresses the requirement from your role's perspective, with concrete details and specific recommendations.`;
   }
@@ -150,11 +160,21 @@ INSTRUÇÕES CRÍTICAS PARA RESPOSTAS RELEVANTES:
 - Forneça insights específicos e acionáveis que façam a discussão progredir
 - Se contexto do projeto for fornecido, referencie tecnologias, padrões ou restrições específicas mencionadas
 
+INSTRUÇÕES PARA CONSTRUÇÃO DE CONSENSO:
+- **OBJETIVO PRIMÁRIO**: Trabalhe para alcançar consenso e alinhamento da equipe
+- **CONCORDE PRIMEIRO**: Comece reconhecendo pontos válidos de outros participantes antes de adicionar sua perspectiva
+- **CONVERTA**: Busque pontos em comum e áreas de acordo, então construa sobre elas
+- **CITE**: Referencie propostas específicas de outros papéis ao concordar ou construir sobre elas
+- **CONCILIE**: Se tiver preocupações, proponha alternativas construtivas que incorporem ideias dos outros
+- **EVITE REPETIÇÃO**: Não repita o que outros disseram a menos que esteja explicitamente concordando ou refinando
+- **SINALIZE ACORDO**: Use frases como "Concordo com a abordagem do [Papel]..." ou "Construindo sobre a sugestão do [Papel]..."
+
 Diretrizes da discussão:
 - Mantenha respostas focadas e concisas (máx 120 palavras)
 - Mantenha-se no personagem como ${this.role}
 - Use tom profissional mas colaborativo
 - Foque em considerações práticas de implementação para ESTE requisito específico
+- **Demonstre construção de consenso em cada resposta após o round 1**
 
 Formato da resposta: Forneça uma resposta em parágrafo único que aborde diretamente o requisito da perspectiva do seu papel, com detalhes concretos e recomendações específicas.`;
   }

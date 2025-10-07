@@ -75,7 +75,15 @@ Each persona extends `AIPersona` (from `src/personas/aiPersona.ts`) which provid
 - Avoid generic statements and focus on actionable, specific recommendations
 - Build on previous discussion contributions with concrete additions
 
-This enhancement significantly improves discussion relevance by ensuring each persona provides contextual, data-driven insights rather than generic advice.
+**Consensus-Building Instructions (v2.1)**: Personas now explicitly work toward team consensus:
+- **Primary goal**: Achieve team alignment and agreement
+- **Agree first**: Acknowledge valid points from other participants before adding perspective
+- **Converge**: Identify common ground and build upon areas of agreement
+- **Cite others**: Reference specific proposals from other roles when agreeing
+- **Compromise**: Propose constructive alternatives that incorporate others' ideas
+- **Signal progress**: Use explicit phrases like "I agree with [Role]'s approach..."
+
+This enhancement ensures discussions converge toward consensus instead of repeating divergent viewpoints across all rounds.
 
 ### Discussion Engine
 `src/engine/discussion.ts` orchestrates discussions using either fixed 3-round mode (default) or dynamic consensus-driven rounds. The system supports two modes:
@@ -391,7 +399,44 @@ When using **fallback**: You'll see `🚨`, `🔄`, and `📝` emojis showing ha
 
 ## Recent Improvements
 
-### v2.0 - Enhanced Persona Relevance (Latest)
+### v2.1 - Consensus-Building Instructions (Latest)
+**Problem**: Discussions were reaching maximum rounds without achieving consensus. Personas were providing divergent viewpoints in every round instead of converging toward agreement.
+
+**Root Cause Analysis**:
+1. Personas had no explicit instructions to seek consensus
+2. No guidance to acknowledge and build on others' contributions
+3. Missing objective to converge opinions rather than just state perspectives
+4. No prompts to identify areas of agreement or propose compromises
+
+**Solution**: Added comprehensive consensus-building instructions to persona prompts:
+
+**System-Level Changes** (`aiPersona.ts`):
+- Added "CONSENSUS-BUILDING INSTRUCTIONS" section to both English and Portuguese system prompts
+- Defined "PRIMARY GOAL" as achieving team consensus and alignment
+- Provided 7 specific consensus tactics (agree first, converge, cite, compromise, avoid repetition, signal agreement)
+- Updated discussion guidelines to mandate consensus demonstration after round 1
+
+**Context-Level Changes**:
+- Enhanced previousTurns prompt with explicit "GOAL: SEEK CONSENSUS" header
+- Added 5-point checklist for consensus-oriented responses
+- Instructions to cite specific participants when agreeing
+- Guidance to propose alternatives that reconcile different perspectives
+- Focus on demonstrating progress toward consensus in each response
+
+**Expected Impact**:
+- ✅ Discussions converge faster (fewer rounds needed)
+- ✅ Explicit agreement statements between personas
+- ✅ Building on previous ideas instead of repeating viewpoints
+- ✅ Constructive compromises when disagreements exist
+- ✅ Consensus threshold reached before maxRounds limit
+
+**Files Modified**:
+- `src/personas/aiPersona.ts` - Added consensus-building instructions to system and context prompts
+- `CLAUDE.md` - Documentation updated with v2.1 improvements
+
+---
+
+### v2.0 - Enhanced Persona Relevance
 **Problem**: Discussions were generating generic, non-specific responses that didn't address the actual requirements.
 
 **Solution**: Completely restructured persona prompts with:
