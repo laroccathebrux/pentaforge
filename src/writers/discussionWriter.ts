@@ -1,5 +1,7 @@
 import { Discussion, EnhancedDiscussion } from '../engine/discussion.js';
 import { ConsensusMetrics, isDynamicRoundsEnabled } from '../types/consensus.js';
+import { createAIServiceFromEnv, AIMessage } from '../lib/aiService.js';
+import { log } from '../lib/log.js';
 
 export interface WriterConfig {
   language: string;
@@ -205,7 +207,7 @@ function translatePhase(phase: ConsensusMetrics['discussionPhase'], isPortuguese
 }
 
 /**
- * Generates executive summary section with decisions and alternatives
+ * Generates executive summary section with decisions and alternatives using AI
  */
 async function generateExecutiveSummary(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): Promise<string[]> {
   const lines: string[] = [];
@@ -214,53 +216,24 @@ async function generateExecutiveSummary(discussion: Discussion | EnhancedDiscuss
   lines.push(`## ${isPortuguese ? 'Resumo Executivo' : 'Executive Summary'}`);
   lines.push('');
 
-  // Extract key decisions and alternatives from discussion
-  const analysis = analyzeDiscussionDecisions(discussion, isPortuguese);
-
-  // Overview
-  lines.push(`### ${isPortuguese ? 'Visão Geral' : 'Overview'}`);
-  lines.push('');
-  lines.push(analysis.overview);
-  lines.push('');
-
-  // Key decisions with alternatives
-  if (analysis.decisions.length > 0) {
-    lines.push(`### ${isPortuguese ? 'Decisões Tomadas e Alternativas Consideradas' : 'Decisions Made and Alternatives Considered'}`);
+  try {
+    // Use AI to generate comprehensive summary
+    const aiSummary = await generateAISummary(discussion, isPortuguese);
+    lines.push(aiSummary);
     lines.push('');
+  } catch (error) {
+    log.warn(`⚠️ Failed to generate AI summary, using fallback: ${error}`);
 
-    analysis.decisions.forEach((decision, index) => {
-      lines.push(`#### ${index + 1}. ${decision.topic}`);
-      lines.push('');
+    // Fallback to basic summary
+    const totalRounds = discussion.rounds.length > 0 ? Math.max(...discussion.rounds.map(r => r.round)) : 0;
+    const participantCount = discussion.participants.length;
+    const decisionCount = discussion.decisions.length;
 
-      // Final decision
-      lines.push(`**${isPortuguese ? 'Decisão Final' : 'Final Decision'}:** ${decision.finalChoice}`);
-      lines.push('');
-
-      // Rationale
-      if (decision.rationale) {
-        lines.push(`**${isPortuguese ? 'Justificativa' : 'Rationale'}:** ${decision.rationale}`);
-        lines.push('');
-      }
-
-      // Alternatives considered
-      if (decision.alternatives.length > 0) {
-        lines.push(`**${isPortuguese ? 'Alternativas Consideradas e Descartadas' : 'Alternatives Considered and Discarded'}:**`);
-        decision.alternatives.forEach(alt => {
-          lines.push(`- **${alt.option}**: ${alt.reason}`);
-        });
-        lines.push('');
-      }
-    });
-  }
-
-  // Discarded options
-  if (analysis.discarded.length > 0) {
-    lines.push(`### ${isPortuguese ? 'Opções Descartadas Durante a Discussão' : 'Options Discarded During Discussion'}`);
-    lines.push('');
-
-    analysis.discarded.forEach(item => {
-      lines.push(`- **${item.option}**: ${item.reason}`);
-    });
+    if (isPortuguese) {
+      lines.push(`A discussão envolveu ${participantCount} participantes ao longo de ${totalRounds} rodadas, resultando em ${decisionCount} decisões principais.`);
+    } else {
+      lines.push(`The discussion involved ${participantCount} participants across ${totalRounds} rounds, resulting in ${decisionCount} key decisions.`);
+    }
     lines.push('');
   }
 
@@ -268,260 +241,126 @@ async function generateExecutiveSummary(discussion: Discussion | EnhancedDiscuss
 }
 
 /**
- * Analyzes discussion rounds to extract decisions, alternatives, and rationale
+ * Uses AI to generate comprehensive executive summary from discussion
  */
-function analyzeDiscussionDecisions(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): {
-  overview: string;
-  decisions: Array<{
-    topic: string;
-    finalChoice: string;
-    rationale: string;
-    alternatives: Array<{ option: string; reason: string }>;
-  }>;
-  discarded: Array<{ option: string; reason: string }>;
-} {
-  const rounds = discussion.rounds;
+async function generateAISummary(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): Promise<string> {
+  // Create AI service with higher token limit for detailed summary
+  const aiService = createAIServiceFromEnv();
+  // Override maxTokens for summary generation
+  (aiService as any).config.maxTokens = 1500;
 
-  // Extract technology/approach mentions and their evolution
-  const mentions = extractTechnologyMentions(rounds);
-  const decisions = buildDecisionTree(mentions, discussion.decisions, isPortuguese);
-  const discarded = extractDiscardedOptions(rounds, decisions, isPortuguese);
+  // Build discussion context for AI
+  const discussionTranscript = discussion.rounds
+    .map(turn => `[Round ${turn.round}] ${turn.role}: ${turn.content}`)
+    .join('\n\n');
 
-  // Generate overview
-  const overview = generateOverview(discussion, isPortuguese);
+  const finalDecisions = discussion.decisions.join('\n- ');
+  const nextSteps = discussion.nextSteps.join('\n- ');
 
-  return {
-    overview,
-    decisions,
-    discarded
-  };
-}
+  const systemPrompt = isPortuguese
+    ? `Você é um analista especializado em resumir discussões técnicas de equipes de desenvolvimento.
 
-/**
- * Extracts mentions of technologies, approaches, and alternatives from discussion
- */
-function extractTechnologyMentions(rounds: any[]): Map<string, Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>> {
-  const mentions = new Map<string, Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>>();
+Sua tarefa é analisar a transcrição completa de uma discussão em roundtable e gerar um resumo executivo DETALHADO que mostre:
 
-  // Keywords that indicate technology/approach mentions
-  const techIndicators = [
-    'kafka', 'rabbitmq', 'redis', 'postgresql', 'mysql', 'mongodb', 'dynamodb',
-    'react', 'vue', 'angular', 'nextjs', 'express', 'fastapi', 'spring',
-    'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'microservices', 'monolith',
-    'rest', 'graphql', 'grpc', 'oauth', 'jwt', 'saml', 'websocket',
-    'typescript', 'javascript', 'python', 'java', 'go', 'rust'
+1. **Visão Geral**: Resumo em 2-3 frases do que foi discutido e do contexto geral
+
+2. **Decisões Tomadas e Alternativas Consideradas**: Para CADA decisão técnica ou de negócio:
+   - Identifique a DECISÃO FINAL (tecnologia, abordagem, padrão escolhido)
+   - Liste as ALTERNATIVAS que foram consideradas mas descartadas
+   - Explique a JUSTIFICATIVA de por que a opção final foi escolhida
+   - Documente por que as alternativas foram descartadas
+
+Formato esperado:
+
+### Visão Geral
+[Resumo geral da discussão]
+
+### Decisões Tomadas e Alternativas Consideradas
+
+#### 1. [Tópico da Decisão - ex: "Message Broker", "Autenticação", "Arquitetura"]
+**Decisão Final:** [Tecnologia/abordagem escolhida]
+**Justificativa:** [Por que foi escolhida - extraído das falas dos participantes]
+**Alternativas Consideradas e Descartadas:**
+- **[Alternativa 1]**: [Por que foi descartada - extraído das falas]
+- **[Alternativa 2]**: [Por que foi descartada - extraído das falas]
+
+#### 2. [Próxima decisão...]
+
+IMPORTANTE:
+- Use APENAS informações presentes na transcrição
+- Cite as tecnologias/abordagens EXATAMENTE como mencionadas
+- Extraia justificativas REAIS das falas dos participantes, não invente
+- Se uma alternativa foi mencionada mas não teve motivo de descarte explícito, diga "não atendeu aos requisitos específicos"
+- Seja ESPECÍFICO e DETALHADO, evite generalidades`
+    : `You are an analyst specialized in summarizing technical team discussions.
+
+Your task is to analyze the complete transcript of a roundtable discussion and generate a DETAILED executive summary that shows:
+
+1. **Overview**: 2-3 sentence summary of what was discussed and general context
+
+2. **Decisions Made and Alternatives Considered**: For EACH technical or business decision:
+   - Identify the FINAL DECISION (technology, approach, pattern chosen)
+   - List the ALTERNATIVES that were considered but discarded
+   - Explain the RATIONALE for why the final option was chosen
+   - Document why alternatives were discarded
+
+Expected format:
+
+### Overview
+[General discussion summary]
+
+### Decisions Made and Alternatives Considered
+
+#### 1. [Decision Topic - e.g., "Message Broker", "Authentication", "Architecture"]
+**Final Decision:** [Chosen technology/approach]
+**Rationale:** [Why it was chosen - extracted from participant statements]
+**Alternatives Considered and Discarded:**
+- **[Alternative 1]**: [Why it was discarded - extracted from statements]
+- **[Alternative 2]**: [Why it was discarded - extracted from statements]
+
+#### 2. [Next decision...]
+
+IMPORTANT:
+- Use ONLY information present in the transcript
+- Cite technologies/approaches EXACTLY as mentioned
+- Extract REAL justifications from participant statements, don't invent
+- If an alternative was mentioned but no explicit discard reason, say "did not meet specific requirements"
+- Be SPECIFIC and DETAILED, avoid generalities`;
+
+  const userPrompt = isPortuguese
+    ? `Analise esta discussão e gere o resumo executivo conforme instruído:
+
+TRANSCRIÇÃO DA DISCUSSÃO:
+${discussionTranscript}
+
+DECISÕES FINAIS DOCUMENTADAS:
+- ${finalDecisions}
+
+PRÓXIMOS PASSOS:
+- ${nextSteps}
+
+Gere agora o resumo executivo completo em markdown:`
+    : `Analyze this discussion and generate the executive summary as instructed:
+
+DISCUSSION TRANSCRIPT:
+${discussionTranscript}
+
+FINAL DECISIONS DOCUMENTED:
+- ${finalDecisions}
+
+NEXT STEPS:
+- ${nextSteps}
+
+Now generate the complete executive summary in markdown:`;
+
+  const messages: AIMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
   ];
 
-  rounds.forEach(turn => {
-    const content = turn.content.toLowerCase();
+  log.info('🤖 Generating AI-powered executive summary...');
+  const response = await aiService.generateResponse(messages);
+  log.info('✅ Executive summary generated successfully');
 
-    techIndicators.forEach(tech => {
-      if (content.includes(tech)) {
-        // Determine sentiment
-        let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
-
-        const positiveWords = ['recommend', 'suggest', 'prefer', 'better', 'ideal', 'advantage', 'benefit', 'recomendo', 'sugiro', 'prefiro', 'melhor', 'ideal', 'vantagem', 'benefício'];
-        const negativeWords = ['avoid', 'problem', 'issue', 'concern', 'drawback', 'limitation', 'evitar', 'problema', 'questão', 'preocupação', 'desvantagem', 'limitação'];
-
-        if (positiveWords.some(word => content.includes(word))) {
-          sentiment = 'positive';
-        } else if (negativeWords.some(word => content.includes(word))) {
-          sentiment = 'negative';
-        }
-
-        if (!mentions.has(tech)) {
-          mentions.set(tech, []);
-        }
-
-        mentions.get(tech)!.push({
-          speaker: turn.role,
-          content: turn.content,
-          round: turn.round,
-          sentiment
-        });
-      }
-    });
-  });
-
-  return mentions;
-}
-
-/**
- * Builds decision tree from mentions and final decisions
- */
-function buildDecisionTree(
-  mentions: Map<string, Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>>,
-  finalDecisions: string[],
-  isPortuguese: boolean
-): Array<{
-  topic: string;
-  finalChoice: string;
-  rationale: string;
-  alternatives: Array<{ option: string; reason: string }>;
-}> {
-  const decisions: Array<{
-    topic: string;
-    finalChoice: string;
-    rationale: string;
-    alternatives: Array<{ option: string; reason: string }>;
-  }> = [];
-
-  // Group related technologies (e.g., Kafka vs RabbitMQ)
-  const groups = groupRelatedTechnologies(mentions);
-
-  groups.forEach(group => {
-    // Find which one was chosen (appears in final decisions with positive sentiment)
-    const chosen = group.technologies.find(tech => {
-      const techMentions = mentions.get(tech) || [];
-      const hasPositive = techMentions.some(m => m.sentiment === 'positive');
-      const inDecisions = finalDecisions.some(d => d.toLowerCase().includes(tech));
-      return hasPositive && inDecisions;
-    });
-
-    if (chosen) {
-      const chosenMentions = mentions.get(chosen) || [];
-      const rationale = extractRationale(chosenMentions, isPortuguese);
-
-      const alternatives = group.technologies
-        .filter(tech => tech !== chosen)
-        .map(tech => {
-          const techMentions = mentions.get(tech) || [];
-          const reason = extractDiscardReason(techMentions, isPortuguese);
-          return { option: tech.toUpperCase(), reason };
-        })
-        .filter(alt => alt.reason.length > 0);
-
-      decisions.push({
-        topic: group.category,
-        finalChoice: chosen.toUpperCase(),
-        rationale,
-        alternatives
-      });
-    }
-  });
-
-  return decisions;
-}
-
-/**
- * Groups related technologies by category
- */
-function groupRelatedTechnologies(mentions: Map<string, any[]>): Array<{ category: string; technologies: string[] }> {
-  const groups: Array<{ category: string; technologies: string[] }> = [];
-
-  const categories = {
-    'Message Broker': ['kafka', 'rabbitmq'],
-    'Database': ['postgresql', 'mysql', 'mongodb', 'dynamodb', 'redis'],
-    'Frontend Framework': ['react', 'vue', 'angular', 'nextjs'],
-    'Backend Framework': ['express', 'fastapi', 'spring'],
-    'Authentication': ['oauth', 'jwt', 'saml'],
-    'API Protocol': ['rest', 'graphql', 'grpc'],
-    'Programming Language': ['typescript', 'javascript', 'python', 'java', 'go', 'rust'],
-    'Infrastructure': ['docker', 'kubernetes'],
-    'Cloud Provider': ['aws', 'azure', 'gcp'],
-    'Architecture': ['microservices', 'monolith']
-  };
-
-  Object.entries(categories).forEach(([category, techs]) => {
-    const foundTechs = techs.filter(tech => mentions.has(tech));
-    if (foundTechs.length > 0) {
-      groups.push({ category, technologies: foundTechs });
-    }
-  });
-
-  return groups;
-}
-
-/**
- * Extracts rationale for chosen technology
- */
-function extractRationale(mentions: Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>, isPortuguese: boolean): string {
-  const positiveMentions = mentions.filter(m => m.sentiment === 'positive');
-
-  if (positiveMentions.length === 0) {
-    return isPortuguese ? 'Consenso da equipe' : 'Team consensus';
-  }
-
-  // Extract sentences with reasoning
-  const reasoningIndicators = isPortuguese
-    ? ['porque', 'devido', 'uma vez que', 'considerando', 'já que', 'vantagem', 'benefício', 'permite', 'garante']
-    : ['because', 'since', 'due to', 'given that', 'considering', 'advantage', 'benefit', 'allows', 'ensures'];
-
-  const rationales: string[] = [];
-
-  positiveMentions.forEach(mention => {
-    const sentences = mention.content.split(/[.!?]+/);
-    sentences.forEach(sentence => {
-      if (reasoningIndicators.some(indicator => sentence.toLowerCase().includes(indicator))) {
-        rationales.push(sentence.trim());
-      }
-    });
-  });
-
-  return rationales.length > 0
-    ? rationales[0]
-    : (isPortuguese ? 'Recomendado pela equipe técnica' : 'Recommended by technical team');
-}
-
-/**
- * Extracts reason for discarding alternative
- */
-function extractDiscardReason(mentions: Array<{ speaker: string; content: string; round: number; sentiment: 'positive' | 'negative' | 'neutral' }>, isPortuguese: boolean): string {
-  const negativeMentions = mentions.filter(m => m.sentiment === 'negative');
-
-  if (negativeMentions.length === 0) {
-    return '';
-  }
-
-  const reasoningIndicators = isPortuguese
-    ? ['problema', 'limitação', 'desvantagem', 'complexidade', 'custo', 'dificulta', 'não atende']
-    : ['problem', 'limitation', 'drawback', 'complexity', 'cost', 'difficult', 'does not meet'];
-
-  const reasons: string[] = [];
-
-  negativeMentions.forEach(mention => {
-    const sentences = mention.content.split(/[.!?]+/);
-    sentences.forEach(sentence => {
-      if (reasoningIndicators.some(indicator => sentence.toLowerCase().includes(indicator))) {
-        reasons.push(sentence.trim());
-      }
-    });
-  });
-
-  return reasons.length > 0
-    ? reasons[0]
-    : (isPortuguese ? 'Não atende aos requisitos' : 'Does not meet requirements');
-}
-
-/**
- * Extracts discarded options from discussion
- */
-function extractDiscardedOptions(
-  _rounds: any[],
-  decisions: Array<{ topic: string; finalChoice: string; alternatives: Array<{ option: string; reason: string }> }>,
-  _isPortuguese: boolean
-): Array<{ option: string; reason: string }> {
-  const discarded: Array<{ option: string; reason: string }> = [];
-
-  // Collect all alternatives already captured in decisions
-  decisions.forEach(decision => {
-    discarded.push(...decision.alternatives);
-  });
-
-  return discarded;
-}
-
-/**
- * Generates overview of discussion
- */
-function generateOverview(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): string {
-  const totalRounds = discussion.rounds.length > 0 ? Math.max(...discussion.rounds.map(r => r.round)) : 0;
-  const participantCount = discussion.participants.length;
-  const decisionCount = discussion.decisions.length;
-
-  if (isPortuguese) {
-    return `A discussão envolveu ${participantCount} participantes ao longo de ${totalRounds} rodadas, resultando em ${decisionCount} decisões principais. A equipe analisou diferentes alternativas técnicas e de negócio para cada aspecto do projeto, considerando trade-offs entre complexidade, custo, performance e manutenibilidade.`;
-  }
-
-  return `The discussion involved ${participantCount} participants across ${totalRounds} rounds, resulting in ${decisionCount} key decisions. The team analyzed different technical and business alternatives for each aspect of the project, considering trade-offs between complexity, cost, performance, and maintainability.`;
+  return response.content;
 }
