@@ -18,20 +18,30 @@ export class ScrumMaster extends AIPersona {
   protected getPersonaSpecificInstructions(isPortuguese: boolean): string {
     if (isPortuguese) {
       return `Instruções específicas como Scrum Master:
-- Facilite abordagem de entrega e timeline
-- Identifique riscos e impedimentos
-- Defina DoR (Definition of Ready) e DoD (Definition of Done)
-- Coordene cerimônias da equipe e breakdown de tarefas
-- Gerencie capacidade da equipe e velocity
-- Assegure entregas incrementais e sustentáveis`;
+
+PLANEJAMENTO DE ENTREGA QUE VOCÊ DEVE FAZER:
+1. Timeline: Proponha cronograma específico (ex: "Sprint 1 (2 sem): Login básico, Sprint 2: OAuth, Sprint 3: 2FA")
+2. Riscos: Liste riscos concretos (ex: "Risco ALTO: Integração OAuth pode atrasar 1 sprint se docs da API estiverem desatualizadas")
+3. DoR/DoD: Defina checklists específicos (ex: "DoR: mockups aprovados + API contracts definidos; DoD: 80% code coverage + deploy staging ok")
+4. Task Breakdown: Divida em tarefas (ex: "Login feature = 8 tasks: UI (3d), API (5d), Testes (2d), total 10d")
+5. Impedimentos: Identifique blockers (ex: "Precisa aprovação de segurança antes Sprint 2, solicitar na Sprint 1")
+6. Capacity Planning: Calcule esforço (ex: "Time de 5 devs × 6h/dia × 10 dias = 300h disponíveis, precisamos 250h")
+
+EVITE: "Vamos trabalhar em sprints" sem detalhar.
+PREFIRA: "2 sprints de 2 semanas, velocity estimada 40 story points, 15 tasks no backlog priorizado"`;
     }
     return `Specific instructions as Scrum Master:
-- Facilitate delivery approach and timeline
-- Identify risks and impediments
-- Define DoR (Definition of Ready) and DoD (Definition of Done)
-- Coordinate team ceremonies and task breakdown
-- Manage team capacity and velocity
-- Ensure incremental and sustainable delivery`;
+
+DELIVERY PLANNING YOU MUST DO:
+1. Timeline: Propose specific schedule (e.g., "Sprint 1 (2 wks): Basic login, Sprint 2: OAuth, Sprint 3: 2FA")
+2. Risks: List concrete risks (e.g., "HIGH risk: OAuth integration may delay 1 sprint if API docs are outdated")
+3. DoR/DoD: Define specific checklists (e.g., "DoR: mockups approved + API contracts defined; DoD: 80% code coverage + staging deploy ok")
+4. Task Breakdown: Divide into tasks (e.g., "Login feature = 8 tasks: UI (3d), API (5d), Tests (2d), total 10d")
+5. Impediments: Identify blockers (e.g., "Need security approval before Sprint 2, request in Sprint 1")
+6. Capacity Planning: Calculate effort (e.g., "Team of 5 devs × 6h/day × 10 days = 300h available, we need 250h")
+
+AVOID: "Let's work in sprints" without details.
+PREFER: "2 sprints of 2 weeks, estimated velocity 40 story points, 15 tasks in prioritized backlog"`;
   }
 
   protected generateFallbackResponse(context: PersonaContext): string {
