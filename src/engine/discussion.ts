@@ -224,7 +224,19 @@ async function executeDynamicRounds(
         
         // Check if we should terminate
         if (evaluationResult.shouldTerminate && currentRound > config.minRounds) {
-          log.info(`✅ Consensus reached! Agreement: ${consensusMetrics.agreementScore}%, terminating discussion`);
+          // Log final consensus status before terminating
+          logConsensusStatus(consensusMetrics, currentRound - 1, config.consensusThreshold);
+          log.info('');
+          log.info('🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊');
+          log.info('🎉               CONSENSUS REACHED!                    🎉');
+          log.info('🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊');
+          log.info('');
+          log.info(`✅ Final Agreement Score: ${consensusMetrics.agreementScore}% (Threshold: ${config.consensusThreshold}%)`);
+          log.info(`✅ Discussion Phase: ${consensusMetrics.discussionPhase}`);
+          log.info(`✅ Rounds Completed: ${currentRound - 1}`);
+          log.info(`✅ Unresolved Issues: ${consensusMetrics.unresolvedIssues.length}`);
+          log.info(`✅ Conflicting Positions: ${consensusMetrics.conflictingPositions.size}`);
+          log.info('');
           consensusReached = true;
           discussion.consensusReached = true;
           break;
@@ -243,6 +255,11 @@ async function executeDynamicRounds(
 
     // Store consensus metrics
     discussion.consensusHistory.push(consensusMetrics);
+
+    // Log consensus status after evaluation (except for first round)
+    if (roundIndex > 0) {
+      logConsensusStatus(consensusMetrics, currentRound - 1, config.consensusThreshold);
+    }
 
     // Generate round order based on consensus metrics
     const roundOrder = dynamicStrategy.generateNextRound(
@@ -702,4 +719,102 @@ async function routeToResolutionWorkflow(
     // Fallback - continue with normal flow even if resolution workflow fails
     throw error;
   }
+}
+
+/**
+ * Logs detailed consensus status after each round
+ */
+function logConsensusStatus(
+  metrics: ConsensusMetrics,
+  completedRound: number,
+  threshold: number
+): void {
+  const { agreementScore, unresolvedIssues, conflictingPositions, confidenceLevel, discussionPhase } = metrics;
+
+  // Calculate distance to consensus
+  const distanceToConsensus = Math.max(0, threshold - agreementScore);
+  const progressPercent = Math.min(100, (agreementScore / threshold) * 100);
+
+  // Visual progress bar
+  const barLength = 20;
+  const filledBars = Math.floor((progressPercent / 100) * barLength);
+  const emptyBars = barLength - filledBars;
+  const progressBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
+
+  // Status emoji based on progress
+  let statusEmoji = '🔴';
+  if (agreementScore >= threshold) {
+    statusEmoji = '🟢';
+  } else if (agreementScore >= threshold * 0.75) {
+    statusEmoji = '🟡';
+  } else if (agreementScore >= threshold * 0.5) {
+    statusEmoji = '🟠';
+  }
+
+  // Phase emoji
+  const phaseEmoji = {
+    'exploration': '🔍',
+    'alignment': '🤝',
+    'resolution': '🎯',
+    'finalization': '✅'
+  }[discussionPhase] || '📊';
+
+  log.info('');
+  log.info('═══════════════════════════════════════════════════════════════');
+  log.info(`${statusEmoji} CONSENSUS STATUS - Round ${completedRound} Complete`);
+  log.info('═══════════════════════════════════════════════════════════════');
+  log.info(`📊 Agreement Score:     ${agreementScore}% / ${threshold}% (threshold)`);
+  log.info(`📈 Progress:            [${progressBar}] ${progressPercent.toFixed(0)}%`);
+  log.info(`📏 Distance to Goal:    ${distanceToConsensus}% remaining`);
+  log.info(`${phaseEmoji} Discussion Phase:   ${discussionPhase.charAt(0).toUpperCase() + discussionPhase.slice(1)}`);
+  log.info(`🎯 Confidence Level:    ${confidenceLevel}%`);
+  log.info('───────────────────────────────────────────────────────────────');
+
+  // Unresolved issues
+  if (unresolvedIssues.length > 0) {
+    log.info(`⚠️  Unresolved Issues:   ${unresolvedIssues.length}`);
+    unresolvedIssues.slice(0, 3).forEach((issue, idx) => {
+      log.info(`   ${idx + 1}. ${issue}`);
+    });
+    if (unresolvedIssues.length > 3) {
+      log.info(`   ... and ${unresolvedIssues.length - 3} more`);
+    }
+  } else {
+    log.info(`✅ Unresolved Issues:   0 (all resolved)`);
+  }
+
+  log.info('───────────────────────────────────────────────────────────────');
+
+  // Conflicting positions
+  if (conflictingPositions.size > 0) {
+    log.info(`🔀 Conflicting Positions: ${conflictingPositions.size} roles`);
+    let count = 0;
+    conflictingPositions.forEach((positions, role) => {
+      if (count < 2) {
+        log.info(`   • ${role}: ${positions.length} conflict(s)`);
+        count++;
+      }
+    });
+    if (conflictingPositions.size > 2) {
+      log.info(`   ... and ${conflictingPositions.size - 2} more roles`);
+    }
+  } else {
+    log.info(`✅ Conflicting Positions: 0 (all aligned)`);
+  }
+
+  log.info('═══════════════════════════════════════════════════════════════');
+
+  // Status message
+  if (agreementScore >= threshold) {
+    log.info(`🎉 CONSENSUS ACHIEVED! Ready to conclude discussion.`);
+  } else if (agreementScore >= threshold * 0.75) {
+    log.info(`🔜 NEAR CONSENSUS: ${distanceToConsensus}% away from threshold.`);
+  } else if (agreementScore >= threshold * 0.5) {
+    log.info(`⏳ MAKING PROGRESS: Continue discussion to reach consensus.`);
+  } else {
+    log.info(`🔄 EARLY STAGES: Significant discussion still needed.`);
+  }
+
+  log.info('═══════════════════════════════════════════════════════════════');
+  log.info('');
 }
