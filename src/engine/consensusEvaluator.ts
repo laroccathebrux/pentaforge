@@ -123,10 +123,21 @@ Your role:
 
 Analysis criteria:
 - Agreement score: Measure alignment on key decisions (variance-convergence method)
+  * 0-40%: Initial exploration, many divergent views
+  * 40-60%: Some alignment emerging, but significant gaps remain
+  * 60-80%: Good alignment on major points, minor details to resolve
+  * 80-100%: Strong consensus, ready to conclude
 - Unresolved issues: Topics needing more exploration or clarification
 - Conflicts: Direct disagreements or contradictory positions between roles
 - Confidence: Your certainty in the consensus assessment
 - Phase: Current stage of discussion progression
+
+IMPORTANT SCORING GUIDELINES:
+- Be CONSERVATIVE with agreement scores for complex topics (e.g., full e-commerce system, authentication architecture)
+- Complex projects should rarely exceed 60% agreement in early rounds
+- Only assign 80%+ when there's EXPLICIT agreement and specific technical decisions are documented
+- If participants are still exploring options or haven't addressed all aspects, score should be ≤ 50%
+- Look for CONCRETE decisions, not just general statements
 
 Be precise and analytical. Focus on measurable consensus indicators.`;
   }
@@ -187,21 +198,49 @@ Be precise and analytical. Focus on measurable consensus indicators.`;
 
     const uniqueRoles = new Set(turns.map(turn => turn.role));
     const totalTurns = turns.length;
-    
-    // Simple heuristics for rule-based evaluation
-    const agreementScore = Math.min(100, (uniqueRoles.size / 5) * 60 + (totalTurns / 15) * 40);
-    
+    const currentRound = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1;
+
+    // More conservative scoring for complex discussions
+    // Base score starts low and increases gradually
+    let agreementScore = 20; // Start conservative
+
+    // Factor 1: Participation coverage (max +20)
+    const participationBonus = Math.min(20, (uniqueRoles.size / 8) * 20);
+    agreementScore += participationBonus;
+
+    // Factor 2: Discussion depth (max +15)
+    // More turns suggest deeper exploration, but don't immediately mean consensus
+    const depthBonus = Math.min(15, (totalTurns / 24) * 15);
+    agreementScore += depthBonus;
+
+    // Factor 3: Round progression penalty
+    // Early rounds should have lower scores
+    if (currentRound <= 2) {
+      agreementScore = Math.min(agreementScore, 45); // Cap at 45% for first 2 rounds
+    } else if (currentRound <= 4) {
+      agreementScore = Math.min(agreementScore, 65); // Cap at 65% for rounds 3-4
+    }
+
     // Extract potential issues from short responses (likely indicating concerns)
     const shortResponses = turns.filter(turn => turn.content.split(' ').length < 30);
-    const unresolvedIssues = shortResponses.length > 2 ? 
-      ['Implementation details need clarification', 'Technical approach requires consensus'] : [];
+    const unresolvedIssues: string[] = [];
+
+    if (shortResponses.length > 2) {
+      unresolvedIssues.push('Implementation details need clarification');
+    }
+
+    // Always add issues for early rounds
+    if (currentRound <= 2) {
+      unresolvedIssues.push('Technical approach requires more discussion');
+      unresolvedIssues.push('Architecture decisions need consensus');
+    }
 
     // Basic conflict detection - look for negative sentiment words
-    const conflictIndicators = ['however', 'but', 'concern', 'issue', 'problem', 'disagree'];
+    const conflictIndicators = ['however', 'but', 'concern', 'issue', 'problem', 'disagree', 'alternatively', 'instead'];
     const conflictingPositions = new Map<string, string[]>();
-    
+
     turns.forEach(turn => {
-      const hasConflictIndicators = conflictIndicators.some(indicator => 
+      const hasConflictIndicators = conflictIndicators.some(indicator =>
         turn.content.toLowerCase().includes(indicator)
       );
       if (hasConflictIndicators) {
@@ -209,12 +248,24 @@ Be precise and analytical. Focus on measurable consensus indicators.`;
       }
     });
 
+    // Determine phase more conservatively
+    let discussionPhase: 'exploration' | 'alignment' | 'resolution' | 'finalization' = 'exploration';
+    if (currentRound > 5 && agreementScore > 70) {
+      discussionPhase = 'finalization';
+    } else if (currentRound > 3 && agreementScore > 55) {
+      discussionPhase = 'resolution';
+    } else if (currentRound > 1 && agreementScore > 35) {
+      discussionPhase = 'alignment';
+    }
+
+    log.debug(`📊 Rule-based evaluation: round=${currentRound}, agreement=${agreementScore}%, issues=${unresolvedIssues.length}, conflicts=${conflictingPositions.size}`);
+
     return {
-      agreementScore,
+      agreementScore: Math.floor(agreementScore),
       unresolvedIssues,
       conflictingPositions,
-      confidenceLevel: 60, // Lower confidence for rule-based evaluation
-      discussionPhase: totalTurns > 10 ? 'resolution' : 'exploration',
+      confidenceLevel: 50, // Lower confidence for rule-based evaluation
+      discussionPhase,
     };
   }
 

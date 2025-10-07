@@ -1,5 +1,7 @@
 import { Discussion, EnhancedDiscussion } from '../engine/discussion.js';
 import { ConsensusMetrics, isDynamicRoundsEnabled } from '../types/consensus.js';
+import { createAIServiceFromEnv, AIMessage } from '../lib/aiService.js';
+import { log } from '../lib/log.js';
 
 export interface WriterConfig {
   language: string;
@@ -24,6 +26,9 @@ export async function writeDiscussionMarkdown(
   lines.push(`**${isPortuguese ? 'Prompt de Entrada' : 'Input Prompt'}:** ${prompt}`);
   lines.push(`**${isPortuguese ? 'Idioma' : 'Language'}:** ${language}`);
   lines.push('');
+
+  // Executive Summary (new section before participants)
+  lines.push(...await generateExecutiveSummary(discussion, isPortuguese));
 
   // Participants
   lines.push(`## ${isPortuguese ? 'Participantes' : 'Participants'}`);
@@ -196,7 +201,166 @@ function translatePhase(phase: ConsensusMetrics['discussionPhase'], isPortuguese
       default: return phase;
     }
   }
-  
+
   // English - just capitalize first letter
   return phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+
+/**
+ * Generates executive summary section with decisions and alternatives using AI
+ */
+async function generateExecutiveSummary(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): Promise<string[]> {
+  const lines: string[] = [];
+
+  // Section header
+  lines.push(`## ${isPortuguese ? 'Resumo Executivo' : 'Executive Summary'}`);
+  lines.push('');
+
+  try {
+    // Use AI to generate comprehensive summary
+    const aiSummary = await generateAISummary(discussion, isPortuguese);
+    lines.push(aiSummary);
+    lines.push('');
+  } catch (error) {
+    log.warn(`⚠️ Failed to generate AI summary, using fallback: ${error}`);
+
+    // Fallback to basic summary
+    const totalRounds = discussion.rounds.length > 0 ? Math.max(...discussion.rounds.map(r => r.round)) : 0;
+    const participantCount = discussion.participants.length;
+    const decisionCount = discussion.decisions.length;
+
+    if (isPortuguese) {
+      lines.push(`A discussão envolveu ${participantCount} participantes ao longo de ${totalRounds} rodadas, resultando em ${decisionCount} decisões principais.`);
+    } else {
+      lines.push(`The discussion involved ${participantCount} participants across ${totalRounds} rounds, resulting in ${decisionCount} key decisions.`);
+    }
+    lines.push('');
+  }
+
+  return lines;
+}
+
+/**
+ * Uses AI to generate comprehensive executive summary from discussion
+ */
+async function generateAISummary(discussion: Discussion | EnhancedDiscussion, isPortuguese: boolean): Promise<string> {
+  // Create AI service with higher token limit for detailed summary
+  const aiService = createAIServiceFromEnv();
+  // Override maxTokens for summary generation
+  (aiService as any).config.maxTokens = 1500;
+
+  // Build discussion context for AI
+  const discussionTranscript = discussion.rounds
+    .map(turn => `[Round ${turn.round}] ${turn.role}: ${turn.content}`)
+    .join('\n\n');
+
+  const finalDecisions = discussion.decisions.join('\n- ');
+  const nextSteps = discussion.nextSteps.join('\n- ');
+
+  const systemPrompt = isPortuguese
+    ? `Você é um analista especializado em resumir discussões técnicas de equipes de desenvolvimento.
+
+Sua tarefa é analisar a transcrição completa de uma discussão em roundtable e gerar um resumo executivo DETALHADO que mostre:
+
+1. **Visão Geral**: Resumo em 2-3 frases do que foi discutido e do contexto geral
+
+2. **Decisões Tomadas e Alternativas Consideradas**: Para CADA decisão técnica ou de negócio:
+   - Identifique a DECISÃO FINAL (tecnologia, abordagem, padrão escolhido)
+   - Liste as ALTERNATIVAS que foram consideradas mas descartadas
+   - Explique a JUSTIFICATIVA de por que a opção final foi escolhida
+   - Documente por que as alternativas foram descartadas
+
+Formato esperado:
+
+### Visão Geral
+[Resumo geral da discussão]
+
+### Decisões Tomadas e Alternativas Consideradas
+
+#### 1. [Tópico da Decisão - ex: "Message Broker", "Autenticação", "Arquitetura"]
+**Decisão Final:** [Tecnologia/abordagem escolhida]
+**Justificativa:** [Por que foi escolhida - extraído das falas dos participantes]
+**Alternativas Consideradas e Descartadas:**
+- **[Alternativa 1]**: [Por que foi descartada - extraído das falas]
+- **[Alternativa 2]**: [Por que foi descartada - extraído das falas]
+
+#### 2. [Próxima decisão...]
+
+IMPORTANTE:
+- Use APENAS informações presentes na transcrição
+- Cite as tecnologias/abordagens EXATAMENTE como mencionadas
+- Extraia justificativas REAIS das falas dos participantes, não invente
+- Se uma alternativa foi mencionada mas não teve motivo de descarte explícito, diga "não atendeu aos requisitos específicos"
+- Seja ESPECÍFICO e DETALHADO, evite generalidades`
+    : `You are an analyst specialized in summarizing technical team discussions.
+
+Your task is to analyze the complete transcript of a roundtable discussion and generate a DETAILED executive summary that shows:
+
+1. **Overview**: 2-3 sentence summary of what was discussed and general context
+
+2. **Decisions Made and Alternatives Considered**: For EACH technical or business decision:
+   - Identify the FINAL DECISION (technology, approach, pattern chosen)
+   - List the ALTERNATIVES that were considered but discarded
+   - Explain the RATIONALE for why the final option was chosen
+   - Document why alternatives were discarded
+
+Expected format:
+
+### Overview
+[General discussion summary]
+
+### Decisions Made and Alternatives Considered
+
+#### 1. [Decision Topic - e.g., "Message Broker", "Authentication", "Architecture"]
+**Final Decision:** [Chosen technology/approach]
+**Rationale:** [Why it was chosen - extracted from participant statements]
+**Alternatives Considered and Discarded:**
+- **[Alternative 1]**: [Why it was discarded - extracted from statements]
+- **[Alternative 2]**: [Why it was discarded - extracted from statements]
+
+#### 2. [Next decision...]
+
+IMPORTANT:
+- Use ONLY information present in the transcript
+- Cite technologies/approaches EXACTLY as mentioned
+- Extract REAL justifications from participant statements, don't invent
+- If an alternative was mentioned but no explicit discard reason, say "did not meet specific requirements"
+- Be SPECIFIC and DETAILED, avoid generalities`;
+
+  const userPrompt = isPortuguese
+    ? `Analise esta discussão e gere o resumo executivo conforme instruído:
+
+TRANSCRIÇÃO DA DISCUSSÃO:
+${discussionTranscript}
+
+DECISÕES FINAIS DOCUMENTADAS:
+- ${finalDecisions}
+
+PRÓXIMOS PASSOS:
+- ${nextSteps}
+
+Gere agora o resumo executivo completo em markdown:`
+    : `Analyze this discussion and generate the executive summary as instructed:
+
+DISCUSSION TRANSCRIPT:
+${discussionTranscript}
+
+FINAL DECISIONS DOCUMENTED:
+- ${finalDecisions}
+
+NEXT STEPS:
+- ${nextSteps}
+
+Now generate the complete executive summary in markdown:`;
+
+  const messages: AIMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  log.info('🤖 Generating AI-powered executive summary...');
+  const response = await aiService.generateResponse(messages);
+  log.info('✅ Executive summary generated successfully');
+
+  return response.content;
 }
